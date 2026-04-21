@@ -1,0 +1,44 @@
+#!/bin/sh
+
+DEP_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+
+main()(
+  for f in "$DEP_ROOT"/commands/*.sh; do
+    . "$f"
+  done
+
+  while true; do
+    case "${1:-}" in
+      global)  DEP_GLOBAL=1; shift ;;
+      --trust) DEP_AUTO_TRUST=1; shift ;;
+      *) break ;;
+    esac
+  done
+
+  case "${1:-}" in
+    --version|-v) echo "dep $DEP_VERSION"; return 0 ;;
+  esac
+
+  task="${1:-help}"
+  shift 2>/dev/null || true
+
+  cmd="dep_$task"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    "$cmd" "$@"
+    return
+  fi
+
+  root=$(dep_find_root 2>/dev/null) || { dep_help; return; }
+  scripts_path=$(dep_scripts_path "$root")
+
+  if grep -qE "^${task}[[:space:]]*\(\)" "$scripts_path" 2>/dev/null; then
+    . "$scripts_path"
+    cd "$root"
+    "$task" "$@"
+    return
+  fi
+
+  dep_help
+)
+
+main "$@"

@@ -1,0 +1,511 @@
+DEP_STORE_DIR=".@"
+DEP_MANIFEST_FILE="@manifest"
+DEP_LOCKFILE_FILE="@lock"
+DEP_SCRIPTS_FILE="@scripts"
+DEP_ENV_FILE="$HOME/.dep/env.sh"
+DEP_CONFIG_FILE="$HOME/.dep/config.sh"
+DEP_RESERVED="install uninstall global_install global_uninstall"
+DEP_TRUST_FILE="trust"
+DEP_SSH_FILE="@ssh"
+DEP_KNOWN_HOSTS="${DEP_ROOT:-.}/known_hosts"
+
+# --- config ---
+
+if test -f "${DEP_CONFIG_FILE:-}"; then
+  . "$DEP_CONFIG_FILE"
+fi
+
+DEP_VERSION=$(sed -n '1p' "${DEP_ROOT:-.}/VERSION" 2>/dev/null)
+test -n "$DEP_VERSION" || DEP_VERSION="0.0.0"
+
+dep_manifest_path()(
+  printf '%s/%s\n' "$1" "$DEP_MANIFEST_FILE"
+)
+
+dep_lockfile_path()(
+  printf '%s/%s\n' "$1" "$DEP_LOCKFILE_FILE"
+)
+
+dep_scripts_path()(
+  printf '%s/%s\n' "$1" "$DEP_SCRIPTS_FILE"
+)
+
+dep_store_path()(
+  printf '%s/%s\n' "$1" "$DEP_STORE_DIR"
+)
+
+dep_store_entry_path()(
+  printf '%s/%s/%s\n' "$1" "$DEP_STORE_DIR" "$2"
+)
+
+dep_find_root()(
+  if test "${DEP_GLOBAL:-0}" = 1; then
+    root="$HOME/.dep"
+    test -f "$(dep_manifest_path "$root")" && echo "$root" && return 0
+    return 1
+  fi
+  dir="$PWD"
+  while true; do
+    test -f "$(dep_manifest_path "$dir")" && echo "$dir" && return 0
+    test "$dir" = "/" && break
+    dir="${dir%/*}"
+    test -z "$dir" && dir="/"
+  done
+  return 1
+)
+
+dep_trim_entry()(
+  printf '%s\n' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+)
+
+# --- semver ---
+
+dep_semver_parts()(
+  version=$(dep_trim_entry "$1")
+
+  case "$version" in
+    ''|*[!0-9.]*|.*|*.) return 1 ;;
+  esac
+
+  old_ifs=$IFS
+  IFS=.
+  set -- $version
+  IFS=$old_ifs
+
+  test "$#" -ge 1 && test "$#" -le 3 || return 1
+
+  major=${1:-0}
+  minor=${2:-0}
+  patch=${3:-0}
+
+  for part in "$major" "$minor" "$patch"; do
+    case "$part" in
+      ''|*[!0-9]*) return 1 ;;
+    esac
+  done
+
+  printf '%s %s %s\n' "$major" "$minor" "$patch"
+)
+
+dep_semver_valid()(
+  dep_semver_parts "$1" >/dev/null 2>&1
+)
+
+dep_semver_ge()(
+  left_version=$(dep_trim_entry "$1")
+  right_version=$(dep_trim_entry "$2")
+
+  dep_semver_valid "$left_version" || return 2
+  dep_semver_valid "$right_version" || return 2
+
+  old_ifs=$IFS
+  IFS=.
+  set -- $left_version
+  IFS=$old_ifs
+  left_major=${1:-0}
+  left_minor=${2:-0}
+  left_patch=${3:-0}
+
+  old_ifs=$IFS
+  IFS=.
+  set -- $right_version
+  IFS=$old_ifs
+  right_major=${1:-0}
+  right_minor=${2:-0}
+  right_patch=${3:-0}
+
+  test "$left_major" -gt "$right_major" && return 0
+  test "$left_major" -lt "$right_major" && return 1
+
+  test "$left_minor" -gt "$right_minor" && return 0
+  test "$left_minor" -lt "$right_minor" && return 1
+
+  test "$left_patch" -ge "$right_patch"
+)
+
+# --- version checks ---
+
+dep_require_manifest_version()(
+  required=$(dep_trim_entry "$1")
+
+  test -n "$required" || {
+    echo "@manifest incomplet : version manquante (première ligne)"
+    return 1
+  }
+
+  dep_semver_valid "$required" || {
+    echo "@manifest contient une version invalide : $required"
+    return 1
+  }
+
+  dep_semver_valid "$DEP_VERSION" || {
+    echo "VERSION contient une version invalide : $DEP_VERSION"
+    return 1
+  }
+
+  dep_semver_ge "$DEP_VERSION" "$required" && return 0
+
+  echo "@manifest requiert dep >= $required (courant : $DEP_VERSION) - mettre dep à jour"
+  return 1
+)
+
+dep_require_lockfile_version()(
+  sync_version=$(dep_trim_entry "$1")
+
+  test -n "$sync_version" || return 0
+
+  dep_semver_valid "$sync_version" || {
+    echo "@lock contient une version invalide : $sync_version"
+    return 1
+  }
+
+  dep_semver_ge "$DEP_VERSION" "$sync_version" && return 0
+
+  echo "@lock a été généré par dep $sync_version (courant : $DEP_VERSION) - mettre dep à jour ou régénérer @lock"
+  return 1
+)
+
+# --- manifest/lock read (plain text) ---
+
+dep_read_version()(
+  file="$1"
+  test -f "$file" || return 1
+  sed -n '1p' "$file"
+)
+
+dep_read_entries()(
+  file="$1"
+  test -f "$file" || return 0
+  tail -n +2 "$file" | while IFS= read -r line; do
+    line=$(dep_trim_entry "$line")
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    printf '%s\n' "$line"
+  done
+)
+
+# --- manifest/lock write (plain text) ---
+
+dep_write_manifest()(
+  file="$1" version="$2" deps="${3-}"
+
+  tmp="${file}.tmp"
+  trap 'rm -f "$tmp"' EXIT
+
+  printf '%s\n' "$version" > "$tmp"
+
+  if test -n "$deps"; then
+    nl='
+'
+    old_ifs=$IFS
+    IFS=$nl
+    set -f
+    for entry in $deps; do
+      entry=$(dep_trim_entry "$entry")
+      test -n "$entry" || continue
+      printf '%s\n' "$entry"
+    done >> "$tmp"
+    set +f
+    IFS=$old_ifs
+  fi
+
+  mv "$tmp" "$file"
+)
+
+dep_write_lockfile()(
+  file="$1" version="$2" locks="${3-}"
+
+  tmp="${file}.tmp"
+  trap 'rm -f "$tmp"' EXIT
+
+  printf '%s\n' "$version" > "$tmp"
+
+  if test -n "$locks"; then
+    nl='
+'
+    old_ifs=$IFS
+    IFS=$nl
+    set -f
+    for entry in $locks; do
+      entry=$(dep_trim_entry "$entry")
+      test -n "$entry" || continue
+      printf '%s\n' "$entry"
+    done >> "$tmp"
+    set +f
+    IFS=$old_ifs
+  fi
+
+  mv "$tmp" "$file"
+)
+
+# --- dep entry parsing ---
+
+dep_escape_dq()(
+  printf '%s\n' "$1" | sed 's/[\\$`"]/\\&/g'
+)
+
+dep_parse()(
+  entry=$(dep_trim_entry "$1") name=""
+
+  case "$entry" in
+    *=*) name="${entry%%=*}"; entry="${entry#*=}" ;;
+  esac
+
+  case "$entry" in
+    *@*)   ref="${entry##*@}"; source="${entry%@*}" ;;
+    *"#"*) ref="${entry##*#}"; source="${entry%#*}" ;;
+    *)     ref=""; source="$entry" ;;
+  esac
+
+  test -z "$name" && name="${source##*/}"
+
+  case "$entry" in
+    *@*|*"#"*) proto=git ;;
+    *)         proto=fs ;;
+  esac
+
+  printf 'name="%s" proto="%s" source="%s" ref="%s"\n' \
+    "$(dep_escape_dq "$name")" "$proto" \
+    "$(dep_escape_dq "$source")" "$(dep_escape_dq "$ref")"
+)
+
+dep_append_line()(
+  list="${1-}" line=$(dep_trim_entry "$2")
+
+  if test -z "$line"; then
+    test -n "$list" && printf '%s' "$list"
+    return 0
+  fi
+
+  if test -n "$list"; then
+    printf '%s\n%s' "$list" "$line"
+  else
+    printf '%s' "$line"
+  fi
+)
+
+# --- filesystem ---
+
+dep_abs_path()(
+  path="$1"
+  dir="${path%/*}"
+  base="${path##*/}"
+
+  test -n "$dir" || dir="/"
+  test "$dir" = "$path" && dir='.'
+
+  abs_dir=$(CDPATH= cd -- "$dir" && pwd -P) || return 1
+
+  case "$abs_dir" in
+    /) printf '/%s\n' "$base" ;;
+    *) printf '%s/%s\n' "$abs_dir" "$base" ;;
+  esac
+)
+
+dep_resolve_dir()(
+  CDPATH= cd -P -- "$1" || return 1
+  pwd -P
+)
+
+dep_link()(
+  target="$1" link="$2"
+  link_dir=${link%/*}
+
+  test "$link_dir" = "$link" && link_dir='.'
+
+  mkdir -p "$link_dir"
+  rm -f "$link"
+  ln -s "$target" "$link"
+)
+
+# --- @scripts ---
+
+dep_is_reserved()(
+  name="$1"
+  case " $DEP_RESERVED " in
+    *" $name "*) return 0 ;;
+  esac
+  return 1
+)
+
+dep_run_hook()(
+  pkg_dir="$1"
+  hook="$2"
+
+  if test "${DEP_GLOBAL:-0}" = 1; then
+    case "$hook" in
+      install) hook=global_install ;;
+      uninstall) hook=global_uninstall ;;
+    esac
+  fi
+
+  scripts_path=$(dep_scripts_path "$pkg_dir")
+  test -f "$scripts_path" || return 0
+
+  cd "$pkg_dir"
+  . "$scripts_path"
+
+  # POSIX : command -v retourne le chemin pour les binaires, le nom pour les fonctions
+  hook_path=$(command -v "$hook" 2>/dev/null) || return 0
+  case "$hook_path" in
+    /*) return 0 ;;
+    ?*) "$hook" ;;
+  esac
+  return 0
+)
+
+dep_scripts_user_tasks()(
+  file="$1"
+  test -f "$file" || return 0
+
+  grep -E '^[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\(\)' "$file" 2>/dev/null |
+    sed 's/[[:space:]]*()//' |
+    while IFS= read -r name; do
+      dep_is_reserved "$name" || printf '%s\n' "$name"
+    done
+)
+
+dep_has_scripts()(
+  pkg_dir="$1"
+  test -f "$(dep_scripts_path "$pkg_dir")"
+)
+
+# --- profile ---
+
+dep_profile_add()(
+  name="$1"
+  content="$2"
+  marker_start="# --- dep:$name ---"
+  marker_end="# --- /dep:$name ---"
+
+  mkdir -p "$(dirname "$DEP_ENV_FILE")"
+  touch "$DEP_ENV_FILE"
+
+  dep_profile_remove "$name"
+
+  printf '%s\n%s\n%s\n' "$marker_start" "$content" "$marker_end" >> "$DEP_ENV_FILE"
+)
+
+dep_profile_remove()(
+  name="$1"
+  test -f "$DEP_ENV_FILE" || return 0
+
+  marker_start="# --- dep:$name ---"
+  marker_end="# --- /dep:$name ---"
+  tmp="${DEP_ENV_FILE}.tmp"
+
+  skip=0
+  while IFS= read -r line; do
+    test "$line" = "$marker_start" && skip=1 && continue
+    test "$line" = "$marker_end" && skip=0 && continue
+    test "$skip" = 0 && printf '%s\n' "$line"
+  done < "$DEP_ENV_FILE" > "$tmp"
+
+  mv "$tmp" "$DEP_ENV_FILE"
+)
+
+dep_path_add()(
+  dir="$1"
+  tag=$(printf '%s' "$dir" | sed 's/[^a-zA-Z0-9_-]/_/g')
+  dep_profile_add "path_$tag" "export PATH=\"$dir:\$PATH\""
+)
+
+dep_path_remove()(
+  dir="$1"
+  tag=$(printf '%s' "$dir" | sed 's/[^a-zA-Z0-9_-]/_/g')
+  dep_profile_remove "path_$tag"
+)
+
+# --- trust ---
+
+dep_is_trusted()(
+  root="$1"
+  trust_file="$(dep_store_path "$root")/$DEP_TRUST_FILE"
+  test -f "$trust_file" || return 1
+  read -r line < "$trust_file"
+  test "$line" = "YES"
+)
+
+dep_revoke_trust()(
+  root="$1"
+  rm -f "$(dep_store_path "$root")/$DEP_TRUST_FILE"
+)
+
+dep_trust_prompt()(
+  root="$1"
+  dep_is_trusted "$root" && return 0
+
+  store=$(dep_store_path "$root")
+
+  has_scripts=0
+  for entry in "$store"/*; do
+    case "${entry##*/}" in
+      *"#"*) ;;
+      *) continue ;;
+    esac
+    real=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
+    test -f "$real/$DEP_SCRIPTS_FILE" && has_scripts=1 && break
+  done
+  test "$has_scripts" = 0 && return 0
+
+  if test "${DEP_AUTO_TRUST:-0}" = 1; then
+    printf 'YES\n' > "$store/$DEP_TRUST_FILE"
+    return 0
+  fi
+
+  echo
+  echo "Des dépendances contiennent un fichier @scripts :"
+  for entry in "$store"/*; do
+    case "${entry##*/}" in
+      *"#"*) ;;
+      *) continue ;;
+    esac
+    real=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
+    if test -f "$real/$DEP_SCRIPTS_FILE"; then
+      printf '  %s/@scripts\n' "$entry"
+    fi
+  done
+  echo
+  echo "Lisez ces fichiers avant de continuer."
+  printf 'Valider ? [YES] '
+  if ! test -t 0; then
+    echo
+    echo "dep: pas de TTY - relancer avec --trust ou DEP_AUTO_TRUST=1 pour valider les hooks"
+    return 1
+  fi
+  read -r answer
+  answer=${answer:-YES}
+
+  if test "$answer" = "YES"; then
+    printf 'YES\n' > "$store/$DEP_TRUST_FILE"
+    echo "dépendances validées"
+    return 0
+  fi
+
+  echo "non validé — les @scripts ne seront pas exécutés"
+  return 1
+)
+
+dep_ssh_path()(
+  printf '%s/%s\n' "$1" "$DEP_SSH_FILE"
+)
+
+# --- git ---
+
+dep_git()(
+  pkg_dir="$1"; shift
+  hosts=""
+  ssh_file="$pkg_dir/$DEP_SSH_FILE"
+  if test -f "$ssh_file"; then
+    hosts="$ssh_file"
+  elif test -f "$DEP_KNOWN_HOSTS"; then
+    hosts="$DEP_KNOWN_HOSTS"
+  fi
+  if test -n "$hosts"; then
+    GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=$hosts -o StrictHostKeyChecking=yes" \
+      git "$@"
+  else
+    git "$@"
+  fi
+)
