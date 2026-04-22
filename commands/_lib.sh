@@ -538,6 +538,8 @@ dep_run_user_task()(
 
   scripts_dir=${scripts_path%/*}
   (
+    export scripts_dir 
+    export scripts_path
     cd "$scripts_dir" || return 1
     . "$scripts_path"
     cd "$root" || return 1
