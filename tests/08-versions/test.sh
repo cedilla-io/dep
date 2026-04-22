@@ -6,8 +6,8 @@ write_manifest "$WORK/t08/mod-b/@manifest" "$WORK/repos/lib-c@v2"
 cd "$WORK/t08"
 $DEP sync
 
-assert "mod-a/.@ pointe sur le store racine" 'test -L mod-a/.@'
-assert "mod-b/.@ pointe sur le store racine" 'test -L mod-b/.@'
+assert "mod-a/.@ est un dossier local" 'test -d mod-a/.@ && ! test -L mod-a/.@'
+assert "mod-b/.@ est un dossier local" 'test -d mod-b/.@ && ! test -L mod-b/.@'
 assert "mod-a voit v1 via alias de branche" 'test "$(cat mod-a/.@/lib-c@v1/version.txt)" = "v1"'
 assert "mod-b voit v2 via alias de branche" 'test "$(cat mod-b/.@/lib-c@v2/version.txt)" = "v2"'
 assert "pas de nom canonique git" '! test -e .@/lib-c'

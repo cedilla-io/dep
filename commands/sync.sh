@@ -70,6 +70,42 @@ dep_sync_prune_store()(
   done
 )
 
+dep_sync_line_in_lines()(
+  needle="$1"
+  lines="${2-}"
+
+  test -n "$lines" || return 1
+
+  nl='
+'
+  old_ifs=$IFS
+  IFS=$nl
+  set -f
+  for line in $lines; do
+    test "$line" = "$needle" && set +f && IFS=$old_ifs && return 0
+  done
+  set +f
+  IFS=$old_ifs
+  return 1
+)
+
+dep_sync_prune_pkg_store()(
+  pkg_dir="$1"
+  kept_links="${2-}"
+  store=$(dep_store_path "$pkg_dir")
+
+  test -d "$store" || return 0
+
+  for entry in "$store"/*; do
+    base=${entry##*/}
+    case "$base" in
+      ''|"$DEP_TRUST_FILE"|'.hooks_pending'|'.links_desired'|'.hashes_desired') continue ;;
+      .*) continue ;;
+    esac
+    dep_sync_line_in_lines "$base" "$kept_links" || rm -rf "$entry"
+  done
+)
+
 dep_sync_lock_hash_for_dep()(
   dep_entry="$1"
   lock_entries="${2-}"
@@ -122,9 +158,10 @@ dep_sync_tree()(
   fi
 
   mkdir -p "$(dep_store_path "$root_dir")"
-  if test "$pkg_dir" != "$root_dir"; then
-    dep_replace_with_link "$(dep_store_path "$root_dir")" "$(dep_store_path "$pkg_dir")"
+  if test -L "$(dep_store_path "$pkg_dir")"; then
+    rm -f "$(dep_store_path "$pkg_dir")"
   fi
+  mkdir -p "$(dep_store_path "$pkg_dir")"
 
   new_locks=""
   resolved_links=""
@@ -144,6 +181,9 @@ dep_sync_tree()(
       esac
 
       dep_link "$target" "$(dep_store_entry_path "$root_dir" "$name")"
+      if test "$pkg_dir" != "$root_dir"; then
+        dep_link "$(dep_store_entry_path "$root_dir" "$name")" "$(dep_store_entry_path "$pkg_dir" "$name")"
+      fi
       printf '%s\n' "$name" >> "$links_file"
 
       new_locks=$(dep_append_line "$new_locks" "$dep")
@@ -189,6 +229,9 @@ dep_sync_tree()(
       fi
 
       dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name_ref")"
+      if test "$pkg_dir" != "$root_dir"; then
+        dep_link "$(dep_store_entry_path "$root_dir" "$name_ref")" "$(dep_store_entry_path "$pkg_dir" "$name_ref")"
+      fi
       printf '%s\n' "$name_ref" >> "$links_file"
       printf '%s\n' "$name#$hash" >> "$hashes_file"
 
@@ -200,6 +243,9 @@ dep_sync_tree()(
   IFS=$old_ifs
 
   dep_write_lockfile "$lockfile_path" "$DEP_VERSION" "$new_locks"
+  if test "$pkg_dir" != "$root_dir"; then
+    dep_sync_prune_pkg_store "$pkg_dir" "$resolved_links"
+  fi
 
   nl='
 '
@@ -208,7 +254,7 @@ dep_sync_tree()(
   set -f
   for link_name in $resolved_links; do
     test -n "$link_name" || continue
-    dep_path=$(dep_store_entry_path "$root_dir" "$link_name")
+    dep_path=$(dep_store_entry_path "$pkg_dir" "$link_name")
     test -L "$dep_path" || test -d "$dep_path" || continue
     real_path=$(dep_resolve_dir "$dep_path") || continue
     if test -f "$(dep_manifest_path "$real_path")"; then
