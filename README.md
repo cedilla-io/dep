@@ -32,7 +32,7 @@ Dépendances : `sh` POSIX, `git`, `sed`, `grep`.
 ```sh
 dep init                              # crée @manifest + .@/
 dep add ./libs/mylib                  # dep locale (symlink)
-dep add github.com/acme/tool@v1      # dep git (clone shallow)
+dep add github.com:acme/tool@v1      # dep git SSH (clone shallow)
 dep sync                              # installe tout
 dep update                            # ré-résout les refs git
 dep list                              # affiche le statut
@@ -51,14 +51,14 @@ dep remove tool                       # retire une dep
 | `dep unsync [nom]` | Nettoie le store sans toucher au `@manifest` |
 | `dep list` | Affiche les deps et leur statut |
 | `dep help` | Aide + tâches disponibles |
-| `dep <tâche> [args]` | Exécute une tâche du `@scripts` |
+| `dep <tâche> [args]` | Exécute une tâche du projet ou d'une dep |
 | `dep global <cmd>` | Mode global (racine = `~/.dep`) |
 | `dep --trust sync` | Sync sans prompt interactif (CI) |
 | `dep --version` | Affiche la version |
 
 ## Tests
 
-20 scénarios d'intégration (init, add, sync, update, remove, hooks, trust, global, etc.).
+21 scénarios d'intégration (init, add, sync, update, remove, hooks, trust, global, etc.).
 
 ```sh
 dash tests/run.sh
@@ -82,10 +82,12 @@ projet/
 ```
 1.0.0                          # version min de dep requise
 ./libs/core                    # dep locale (symlink)
-github.com/acme/tool@v1       # dep git (clone shallow)
+github.com:acme/tool@v1       # dep git SSH (clone shallow)
 ```
 
 Texte brut, jamais sourcé. Lignes `#` = commentaires.
+
+Git distant : `[git@]host:owner/repo[.git][@ref]`.
 
 ## @scripts
 
@@ -101,13 +103,14 @@ build()(
 
 Hooks réservés : `install`, `uninstall`, `global_install`, `global_uninstall`.
 Tout le reste = tâche utilisateur (`dep build`).
+Les tâches du projet sont prioritaires ; si plusieurs deps exposent le même nom, dep refuse avec une erreur d'ambiguïté.
 
 Les hooks des deps git ne s'exécutent qu'après validation (voir [FAQ](docs/faq.md)).
 
 ## Mode global
 
 ```sh
-dep global init && dep global add github.com/acme/sdk@v1 && dep global sync
+dep global init && dep global add github.com:acme/sdk@v1 && dep global sync
 ```
 
 Hooks : `global_install` / `global_uninstall`. Primitives : `dep_profile_add`, `dep_path_add`, etc.

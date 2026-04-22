@@ -31,10 +31,44 @@ main()(
   root=$(dep_find_root 2>/dev/null) || { dep_help; return; }
   scripts_path=$(dep_scripts_path "$root")
 
-  if grep -qE "^${task}[[:space:]]*\(\)" "$scripts_path" 2>/dev/null; then
-    . "$scripts_path"
-    cd "$root"
-    "$task" "$@"
+  if dep_script_has_user_task "$scripts_path" "$task"; then
+    dep_run_user_task "$root" "$scripts_path" "$task" "$@"
+    return
+  fi
+
+  matches=$(dep_dep_user_task_matches "$root" "$task")
+  if test -n "$matches"; then
+    count=0
+    selected_scripts=""
+
+    nl='
+'
+    old_ifs=$IFS
+    IFS=$nl
+    set -f
+    for match in $matches; do
+      test -n "$match" || continue
+      eval "$match"
+      count=$((count + 1))
+      test -n "$selected_scripts" || selected_scripts="$dep_scripts_path"
+      if test "$count" -gt 1; then
+        break
+      fi
+    done
+    set +f
+    IFS=$old_ifs
+
+    if test "$count" -gt 1; then
+      echo "tâche ambiguë: $task"
+      printf '%s\n' "$matches" | while IFS= read -r match; do
+        test -n "$match" || continue
+        eval "$match"
+        printf '  %s (%s)\n' "$task" "$dep_name"
+      done
+      return 1
+    fi
+
+    dep_run_user_task "$root" "$selected_scripts" "$task" "$@"
     return
   fi
 

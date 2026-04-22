@@ -25,6 +25,19 @@ assert "dep clonée" 'test -L .@/trust-pkg'
 assert "pas de fichier trust" '! test -f .@/trust'
 assert "hook non exécuté sans trust" '! test -f .@/trust-pkg/.hook-ran'
 
+if command -v script >/dev/null 2>&1; then
+  write_manifest "$WORK/t18tty/@manifest" "$WORK/repos/trust-pkg@master"
+  cd "$WORK/t18tty"
+
+  script_cmd="$DEP sync"
+  printf 'YES\n' | script -qfec "$script_cmd" /dev/null >/dev/null 2>&1
+
+  assert "trust interactif crée le fichier" 'test -f .@/trust'
+  assert "trust interactif hook exécuté" 'test -f .@/trust-pkg/.hook-ran'
+fi
+
+cd "$WORK/t18"
+
 # --- avec trust : hooks tournent ---
 printf 'YES\n' > .@/trust
 $DEP sync </dev/null 2>/dev/null

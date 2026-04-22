@@ -245,6 +245,17 @@ dep_escape_dq()(
   printf '%s\n' "$1" | sed 's/[\\$`"]/\\&/g'
 )
 
+dep_is_ssh_source()(
+  source=$(dep_trim_entry "$1")
+
+  case "$source" in
+    git@*:*/*) return 0 ;;
+    /*|./*|../*) return 1 ;;
+    *:*/*) return 0 ;;
+    *) return 1 ;;
+  esac
+)
+
 dep_parse()(
   entry=$(dep_trim_entry "$1") name=""
 
@@ -253,17 +264,43 @@ dep_parse()(
   esac
 
   case "$entry" in
-    *@*)   ref="${entry##*@}"; source="${entry%@*}" ;;
     *"#"*) ref="${entry##*#}"; source="${entry%#*}" ;;
-    *)     ref=""; source="$entry" ;;
+    *)
+      if dep_is_ssh_source "$entry"; then
+        case "$entry" in
+          git@*:*)
+            ssh_rest="${entry#*:}"
+            case "$ssh_rest" in
+              *@*) ref="${ssh_rest##*@}"; source="${entry%@$ref}" ;;
+              *)   ref=""; source="$entry" ;;
+            esac
+            ;;
+          *@*) ref="${entry##*@}"; source="${entry%@$ref}" ;;
+          *)   ref=""; source="$entry" ;;
+        esac
+      else
+        case "$entry" in
+          *@*) ref="${entry##*@}"; source="${entry%@*}" ;;
+          *)   ref=""; source="$entry" ;;
+        esac
+      fi
+      ;;
   esac
 
-  test -z "$name" && name="${source##*/}"
+  if test -z "$name"; then
+    name="${source##*/}"
+    if dep_is_ssh_source "$source"; then
+      case "$name" in
+        *.git) name="${name%.git}" ;;
+      esac
+    fi
+  fi
 
-  case "$entry" in
-    *@*|*"#"*) proto=git ;;
-    *)         proto=fs ;;
-  esac
+  if test -n "$ref" || dep_is_ssh_source "$source"; then
+    proto=git
+  else
+    proto=fs
+  fi
 
   printf 'name="%s" proto="%s" source="%s" ref="%s"\n' \
     "$(dep_escape_dq "$name")" "$proto" \
@@ -360,15 +397,136 @@ dep_scripts_user_tasks()(
   test -f "$file" || return 0
 
   grep -E '^[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\(\)' "$file" 2>/dev/null |
-    sed 's/[[:space:]]*()//' |
+    sed 's/[[:space:]]*().*$//' |
     while IFS= read -r name; do
       dep_is_reserved "$name" || printf '%s\n' "$name"
     done
 )
 
+dep_is_user_task_name()(
+  case "$1" in
+    [a-zA-Z_][a-zA-Z0-9_]*) return 0 ;;
+    *) return 1 ;;
+  esac
+)
+
+dep_script_has_user_task()(
+  file="$1"
+  task="$2"
+
+  dep_is_user_task_name "$task" || return 1
+  test -f "$file" || return 1
+  grep -qE "^${task}[[:space:]]*\\(\\)" "$file" 2>/dev/null
+)
+
+dep_dep_user_task_matches()(
+  root="$1"
+  task="$2"
+  store=$(dep_store_path "$root")
+
+  dep_is_user_task_name "$task" || return 0
+  test -d "$store" || return 0
+
+  for entry in "$store"/*; do
+    dep_name=${entry##*/}
+    case "$dep_name" in
+      ''|.*|*"#"*) continue ;;
+    esac
+    test -L "$entry" || test -d "$entry" || continue
+    dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
+    scripts_path=$(dep_scripts_path "$dep_dir")
+    dep_script_has_user_task "$scripts_path" "$task" || continue
+    printf 'dep_name="%s" dep_scripts_path="%s"\n' \
+      "$(dep_escape_dq "$dep_name")" "$(dep_escape_dq "$scripts_path")"
+  done
+)
+
+dep_dep_user_tasks()(
+  root="$1"
+  store=$(dep_store_path "$root")
+
+  test -d "$store" || return 0
+
+  for entry in "$store"/*; do
+    dep_name=${entry##*/}
+    case "$dep_name" in
+      ''|.*|*"#"*) continue ;;
+    esac
+    test -L "$entry" || test -d "$entry" || continue
+    dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
+    scripts_path=$(dep_scripts_path "$dep_dir")
+    tasks=$(dep_scripts_user_tasks "$scripts_path")
+    test -n "$tasks" || continue
+
+    nl='
+'
+    old_ifs=$IFS
+    IFS=$nl
+    set -f
+    for task in $tasks; do
+      test -n "$task" || continue
+      printf 'dep_name="%s" dep_task="%s"\n' \
+        "$(dep_escape_dq "$dep_name")" "$(dep_escape_dq "$task")"
+    done
+    set +f
+    IFS=$old_ifs
+  done
+)
+
 dep_has_scripts()(
   pkg_dir="$1"
   test -f "$(dep_scripts_path "$pkg_dir")"
+)
+
+dep_prompt_read()(
+  prompt="$1"
+
+  if test -r /dev/tty && test -w /dev/tty; then
+    printf '%s' "$prompt" > /dev/tty
+    IFS= read -r answer < /dev/tty || return 1
+    printf '%s\n' "$answer"
+    return 0
+  fi
+
+  if test -t 0; then
+    printf '%s' "$prompt"
+    IFS= read -r answer || return 1
+    printf '%s\n' "$answer"
+    return 0
+  fi
+
+  return 1
+)
+
+dep_task_needs_trust()(
+  root="$1"
+  scripts_path="$2"
+  store=$(dep_store_path "$root")
+  dep_dir=${scripts_path%/*}
+
+  case "$dep_dir" in
+    "$store"/*) return 0 ;;
+  esac
+  return 1
+)
+
+dep_run_user_task()(
+  root="$1"
+  scripts_path="$2"
+  task="$3"
+  shift 3
+
+  if dep_task_needs_trust "$root" "$scripts_path"; then
+    dep_is_trusted "$root" || dep_trust_prompt "$root" || return 1
+  fi
+
+  scripts_dir=${scripts_path%/*}
+  (
+    cd "$scripts_dir" || return 1
+    . "$scripts_path"
+    cd "$root" || return 1
+    "$task" "$@"
+  )
 )
 
 # --- profile ---
@@ -468,13 +626,12 @@ dep_trust_prompt()(
   done
   echo
   echo "Lisez ces fichiers avant de continuer."
-  printf 'Valider ? [YES] '
-  if ! test -t 0; then
+  if ! answer=$(dep_prompt_read 'Valider ? [YES] '); then
+    echo
     echo
     echo "dep: pas de TTY - relancer avec --trust ou DEP_AUTO_TRUST=1 pour valider les hooks"
     return 1
   fi
-  read -r answer
   answer=${answer:-YES}
 
   if test "$answer" = "YES"; then
@@ -492,6 +649,16 @@ dep_ssh_path()(
 )
 
 # --- git ---
+
+dep_git_remote_url()(
+  source=$(dep_trim_entry "$1")
+
+  case "$source" in
+    git@*:*/*) printf '%s\n' "$source" ;;
+    *:*/*) printf 'git@%s\n' "$source" ;;
+    *) return 1 ;;
+  esac
+)
 
 dep_git()(
   pkg_dir="$1"; shift

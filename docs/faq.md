@@ -37,7 +37,7 @@ Le `@scripts` d'une dep git est du shell sourcé par dep. Le prompt force l'insp
 Supprimer `.@/trust` ou lancer `dep unsync`.
 
 **Les clones SSH échouent ?**
-Le `known_hosts` global (`~/.dep/known_hosts`) couvre github.com, gitlab.com, bitbucket.org, codeberg.org. Pour un serveur privé : `ssh-keyscan host >> @ssh`.
+Le `known_hosts` global (`~/.dep/known_hosts`) couvre github.com, gitlab.com, bitbucket.org, codeberg.org. Utiliser le format `[git@]host:owner/repo[.git][@ref]`. Pour un serveur privé : `ssh-keyscan host >> @ssh`.
 
 **Puis-je utiliser dep dans un CI ?**
 `sh install.sh && dep --trust sync` ou `DEP_AUTO_TRUST=1 dep sync`.
