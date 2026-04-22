@@ -27,8 +27,14 @@ dep_list()(
     test -n "$dep" || continue
     eval "$(dep_parse "$dep")"
     status="manquant"
-    if test -L ".@/$name" || test -d ".@/$name"; then
-      status="ok"
+    if test "$proto" = "git"; then
+      ref_name="${ref:-HEAD}"
+      ref_key=$(dep_ref_key "$ref_name")
+      test -L ".@/$name@$ref_key" || test -d ".@/$name@$ref_key" && status="ok"
+    else
+      if test -L ".@/$name" || test -d ".@/$name"; then
+        status="ok"
+      fi
     fi
     printf "  %-20s %s\n" "$name" "$status"
   done

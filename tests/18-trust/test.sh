@@ -21,9 +21,9 @@ cd "$WORK/t18"
 
 $DEP sync </dev/null 2>/dev/null || true
 
-assert "dep clonée" 'test -L .@/trust-pkg'
+assert "dep clonée" 'test -L .@/trust-pkg@master'
 assert "pas de fichier trust" '! test -f .@/trust'
-assert "hook non exécuté sans trust" '! test -f .@/trust-pkg/.hook-ran'
+assert "hook non exécuté sans trust" '! test -f .@/trust-pkg@master/.hook-ran'
 
 if command -v script >/dev/null 2>&1; then
   write_manifest "$WORK/t18tty/@manifest" "$WORK/repos/trust-pkg@master"
@@ -33,7 +33,7 @@ if command -v script >/dev/null 2>&1; then
   printf 'YES\n' | script -qfec "$script_cmd" /dev/null >/dev/null 2>&1
 
   assert "trust interactif crée le fichier" 'test -f .@/trust'
-  assert "trust interactif hook exécuté" 'test -f .@/trust-pkg/.hook-ran'
+  assert "trust interactif hook exécuté" 'test -f .@/trust-pkg@master/.hook-ran'
 fi
 
 cd "$WORK/t18"
@@ -42,12 +42,12 @@ cd "$WORK/t18"
 printf 'YES\n' > .@/trust
 $DEP sync </dev/null 2>/dev/null
 
-assert "hook exécuté avec trust" 'test -f .@/trust-pkg/.hook-ran'
-assert "hook contenu" 'test "$(cat .@/trust-pkg/.hook-ran)" = "trusted-hook"'
+assert "hook exécuté avec trust" 'test -f .@/trust-pkg@master/.hook-ran'
+assert "hook contenu" 'test "$(cat .@/trust-pkg@master/.hook-ran)" = "trusted-hook"'
 
 # --- remove respecte trust ---
 $DEP remove trust-pkg 2>/dev/null
-assert "dep supprimée" '! test -L .@/trust-pkg'
+assert "dep supprimée" '! test -L .@/trust-pkg@master'
 
 # --- auto-trust ---
 export DEP_AUTO_TRUST=1
@@ -56,7 +56,7 @@ cd "$WORK/t18b"
 
 $DEP sync 2>/dev/null
 assert "auto-trust crée le fichier" 'test -f .@/trust'
-assert "auto-trust hook exécuté" 'test -f .@/trust-pkg/.hook-ran'
+assert "auto-trust hook exécuté" 'test -f .@/trust-pkg@master/.hook-ran'
 
 # --- pas de @scripts = pas de prompt trust ---
 unset DEP_AUTO_TRUST
@@ -71,7 +71,7 @@ write_manifest "$WORK/t18c/@manifest" "$WORK/repos/noscripts-pkg@master"
 cd "$WORK/t18c"
 $DEP sync </dev/null 2>/dev/null
 assert "pas de @scripts = pas de trust requis" '! test -f .@/trust'
-assert "clone ok sans @scripts" 'test -f .@/noscripts-pkg/data.txt'
+assert "clone ok sans @scripts" 'test -f .@/noscripts-pkg@master/data.txt'
 
 # --- update révoque trust ---
 export DEP_AUTO_TRUST=1
@@ -80,10 +80,10 @@ cd "$WORK/t18d"
 $DEP sync 2>/dev/null
 assert "trust initial" 'test -f .@/trust'
 
-rm -f .@/trust-pkg/.hook-ran
+rm -f .@/trust-pkg@master/.hook-ran
 $DEP update 2>/dev/null
 assert "trust révoqué puis re-validé après update" 'test -f .@/trust'
-assert "hook re-exécuté après update" 'test -f .@/trust-pkg/.hook-ran'
+assert "hook re-exécuté après update" 'test -f .@/trust-pkg@master/.hook-ran'
 
 # restaurer
 export DEP_AUTO_TRUST="${ORIG_AUTO_TRUST:-1}"

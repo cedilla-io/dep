@@ -356,6 +356,19 @@ dep_link()(
   ln -s "$target" "$link"
 )
 
+dep_replace_with_link()(
+  target="$1" link="$2"
+  if test -e "$link" || test -L "$link"; then
+    rm -rf "$link"
+  fi
+  dep_link "$target" "$link"
+)
+
+dep_ref_key()(
+  ref="$1"
+  printf '%s\n' "$ref" | sed 's/[^a-zA-Z0-9._-]/_/g'
+)
+
 # --- @scripts ---
 
 dep_is_reserved()(
@@ -515,6 +528,9 @@ dep_run_user_task()(
   scripts_path="$2"
   task="$3"
   shift 3
+
+  # `scripts_path` est un chemin vers le fichier `@scripts` (nom historique au pluriel).
+  # Ici on exécute une seule tâche utilisateur issue de ce fichier.
 
   if dep_task_needs_trust "$root" "$scripts_path"; then
     dep_is_trusted "$root" || dep_trust_prompt "$root" || return 1

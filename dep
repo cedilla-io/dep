@@ -39,6 +39,8 @@ main()(
   matches=$(dep_dep_user_task_matches "$root" "$task")
   if test -n "$matches"; then
     count=0
+    # Nom au pluriel conservé volontairement : on sélectionne un script parmi
+    # l'ensemble des fichiers @scripts potentiellement exposés par les deps.
     selected_scripts=""
 
     nl='
