@@ -8,6 +8,7 @@ DEP_RESERVED="install uninstall global_install global_uninstall"
 DEP_TRUST_FILE="trust"
 DEP_SSH_FILE="@ssh"
 DEP_KNOWN_HOSTS="${DEP_ROOT:-.}/known_hosts"
+DEP_VERBOSE="${DEP_VERBOSE:-${DEP_VERBROSE:-0}}"
 
 # --- config ---
 
@@ -52,6 +53,18 @@ dep_find_root()(
     test -z "$dir" && dir="/"
   done
   return 1
+)
+
+dep_verbose_enabled()(
+  case "${DEP_VERBOSE:-0}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+  esac
+  return 1
+)
+
+dep_verbose()(
+  dep_verbose_enabled || return 0
+  printf '[dep][sync] %s\n' "$*" >&2
 )
 
 dep_trim_entry()(

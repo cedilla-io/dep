@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.name "dep-ci"
+          git config --global user.email "dep-ci@example.com"
+
+      - name: Run integration tests
+        run: dash tests/run.sh

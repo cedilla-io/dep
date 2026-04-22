@@ -15,6 +15,7 @@ dep_sync()(
   : > "$links_file"
   : > "$hashes_file"
 
+  dep_verbose "sync: root=$root"
   dep_sync_tree "$(pwd)" "$(pwd)" "" "$hooks_file" "$links_file" "$hashes_file" || return 1
   dep_sync_prune_store "$(pwd)" "$links_file" "$hashes_file"
 
@@ -25,6 +26,7 @@ dep_sync()(
     hook_dir="${entry#* }"
     case "$hook_proto" in
       fs)
+        dep_verbose "hook install(fs): $hook_dir"
         dep_run_hook "$hook_dir" install
         ;;
       git)
@@ -35,7 +37,10 @@ dep_sync()(
             trusted=no
           fi
         fi
-        test "$trusted" = yes && dep_run_hook "$hook_dir" install
+        if test "$trusted" = yes; then
+          dep_verbose "hook install(git): $hook_dir"
+          dep_run_hook "$hook_dir" install
+        fi
         ;;
     esac
   done < "$hooks_file"
@@ -61,10 +66,16 @@ dep_sync_prune_store()(
       ''|'.hooks_pending'|'.links_desired'|'.hashes_desired'|"$DEP_TRUST_FILE") continue ;;
       .*) continue ;;
       *"#"*)
-        dep_sync_line_in_file "$base" "$hashes_file" || rm -rf "$entry"
+        if ! dep_sync_line_in_file "$base" "$hashes_file"; then
+          dep_verbose "prune store hash: $base"
+          rm -rf "$entry"
+        fi
         ;;
       *)
-        dep_sync_line_in_file "$base" "$links_file" || rm -rf "$entry"
+        if ! dep_sync_line_in_file "$base" "$links_file"; then
+          dep_verbose "prune store link: $base"
+          rm -rf "$entry"
+        fi
         ;;
     esac
   done
@@ -76,7 +87,7 @@ dep_sync_line_in_lines()(
 
   test -n "$lines" || return 1
 
-  nl='
+  nl='\
 '
   old_ifs=$IFS
   IFS=$nl
@@ -102,7 +113,10 @@ dep_sync_prune_pkg_store()(
       ''|"$DEP_TRUST_FILE"|'.hooks_pending'|'.links_desired'|'.hashes_desired') continue ;;
       .*) continue ;;
     esac
-    dep_sync_line_in_lines "$base" "$kept_links" || rm -rf "$entry"
+    if ! dep_sync_line_in_lines "$base" "$kept_links"; then
+      dep_verbose "prune package store: $pkg_dir -> $base"
+      rm -rf "$entry"
+    fi
   done
 )
 
@@ -112,7 +126,7 @@ dep_sync_lock_hash_for_dep()(
 
   test -n "$lock_entries" || return 1
 
-  nl='
+  nl='\
 '
   old_ifs=$IFS
   IFS=$nl
@@ -165,7 +179,7 @@ dep_sync_tree()(
 
   new_locks=""
   resolved_links=""
-  nl='
+  nl='\
 '
   old_ifs=$IFS
   IFS=$nl
@@ -180,8 +194,10 @@ dep_sync_tree()(
         *)  target=$(dep_abs_path "$pkg_dir/$source") || return 1 ;;
       esac
 
+      dep_verbose "link fs: $name -> $target"
       dep_link "$target" "$(dep_store_entry_path "$root_dir" "$name")"
       if test "$pkg_dir" != "$root_dir"; then
+        dep_verbose "link fs nested: $pkg_dir/.@/$name -> $(dep_store_entry_path "$root_dir" "$name")"
         dep_link "$(dep_store_entry_path "$root_dir" "$name")" "$(dep_store_entry_path "$pkg_dir" "$name")"
       fi
       printf '%s\n' "$name" >> "$links_file"
@@ -197,6 +213,7 @@ dep_sync_tree()(
 
       if locked_hash=$(dep_sync_lock_hash_for_dep "$dep" "$lock_entries"); then
         hash="$locked_hash"
+        dep_verbose "lock hit: $dep -> $hash"
       fi
 
       case "$source" in
@@ -224,12 +241,18 @@ dep_sync_tree()(
       store=$(dep_store_entry_path "$root_dir" "$name#$hash")
 
       if ! test -d "$store"; then
+        dep_verbose "clone git: $source_url -> $store"
         dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
+        dep_verbose "checkout git: $name@$ref_name -> $hash"
         dep_git "$pkg_dir" -C "$store" checkout -q "$hash" || return 1
+      else
+        dep_verbose "reuse git store: $store"
       fi
 
+      dep_verbose "link git: $name_ref -> $store"
       dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name_ref")"
       if test "$pkg_dir" != "$root_dir"; then
+        dep_verbose "link git nested: $pkg_dir/.@/$name_ref -> $(dep_store_entry_path "$root_dir" "$name_ref")"
         dep_link "$(dep_store_entry_path "$root_dir" "$name_ref")" "$(dep_store_entry_path "$pkg_dir" "$name_ref")"
       fi
       printf '%s\n' "$name_ref" >> "$links_file"
@@ -247,7 +270,7 @@ dep_sync_tree()(
     dep_sync_prune_pkg_store "$pkg_dir" "$resolved_links"
   fi
 
-  nl='
+  nl='\
 '
   old_ifs=$IFS
   IFS=$nl
@@ -262,6 +285,7 @@ dep_sync_tree()(
       dep_proto=fs
       case "$link_name" in *"@"*) dep_proto=git ;; esac
       if dep_has_scripts "$real_path"; then
+        dep_verbose "queue hook($dep_proto): $real_path"
         printf '%s %s\n' "$dep_proto" "$real_path" >> "$hooks_file"
       fi
     fi
