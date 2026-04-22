@@ -3,6 +3,7 @@ set -eu
 
 DEP_MARKER_START="# --- dep ---"
 DEP_MARKER_END="# --- /dep ---"
+DEP_REPO_URL="${DEP_REPO_URL:-https://github.com/dep-sh/dep.git}"
 
 profile_inject()(
   file="$1"
@@ -34,8 +35,27 @@ detect_shell()(
   esac
 )
 
+ensure_install_sources()(
+  dir="$1"
+
+  test -f "$dir/dep" && test -f "$dir/VERSION" && test -f "$dir/commands/sync.sh" && return 0
+
+  tmp="${TMPDIR:-/tmp}/dep.install.$$"
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  trap 'rm -rf "$tmp"' EXIT INT TERM
+
+  echo "sources dep introuvables localement, récupération depuis $DEP_REPO_URL"
+  git clone --depth 1 "$DEP_REPO_URL" "$tmp/src"
+
+  sh "$tmp/src/install.sh"
+  exit 0
+)
+
 main()(
   dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  ensure_install_sources "$dir"
+
   dest="${HOME}/.dep"
   bin="${HOME}/.local/bin"
 

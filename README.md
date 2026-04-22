@@ -5,10 +5,12 @@ Gestionnaire de dépendances shell minimaliste. POSIX `sh`, pas de runtime, pas 
 ## Installation
 
 ```sh
-curl -sSL https://<hôte>/dep/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/dep-sh/dep/main/install.sh | sh
 ```
 
-Remplacer `<hôte>` par l'URL du miroir. Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une ligne dans le rc du shell courant (bash, zsh, fish ou `.profile`). Pas de `sudo`, pas de logout.
+Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une ligne dans le rc du shell courant (bash, zsh, fish ou `.profile`). Pas de `sudo`, pas de logout.
+
+Par défaut, l'installateur récupère les sources depuis `https://github.com/dep-sh/dep.git` quand il est exécuté via `curl | sh`. Override possible avec `DEP_REPO_URL`.
 
 ### Depuis les sources
 
@@ -58,7 +60,7 @@ dep remove tool                       # retire une dep
 
 ## Tests
 
-21 scénarios d'intégration (init, add, sync, update, remove, hooks, trust, global, etc.).
+26 scénarios d'intégration (init, add, sync, update, remove, hooks, trust, global, etc.).
 
 ```sh
 dash tests/run.sh
