@@ -443,7 +443,7 @@ dep_dep_user_task_matches()(
   for entry in "$store"/*; do
     dep_name=${entry##*/}
     case "$dep_name" in
-      ''|.*|*"#"*) continue ;;
+      ''|.*|*"#"*|*"@"*) continue ;;
     esac
     test -L "$entry" || test -d "$entry" || continue
     dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
@@ -463,7 +463,7 @@ dep_dep_user_tasks()(
   for entry in "$store"/*; do
     dep_name=${entry##*/}
     case "$dep_name" in
-      ''|.*|*"#"*) continue ;;
+      ''|.*|*"#"*|*"@"*) continue ;;
     esac
     test -L "$entry" || test -d "$entry" || continue
     dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
