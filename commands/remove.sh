@@ -57,6 +57,13 @@ dep_remove()(
   fi
 
   dep_path=$(dep_store_entry_path "$root" "$target")
+  if ! test -L "$dep_path" && ! test -d "$dep_path"; then
+    for entry in ".@/$target@"*; do
+      test -L "$entry" || test -d "$entry" || continue
+      dep_path="$entry"
+      break
+    done
+  fi
   if test -L "$dep_path" || test -d "$dep_path"; then
     real_path=$(dep_resolve_dir "$dep_path" 2>/dev/null) || true
     if test -n "$real_path" && dep_has_scripts "$real_path"; then
@@ -68,6 +75,6 @@ dep_remove()(
     fi
   fi
 
-  rm -rf ".@/$target" ".@/$target#"*
+  rm -rf ".@/$target" ".@/$target@"* ".@/$target#"*
   echo "'$target' supprimé"
 )

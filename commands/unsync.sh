@@ -14,7 +14,7 @@ dep_unsync()(
     done
     echo "store nettoyé"
   else
-    rm -rf "$store_path/$1" "$store_path/$1#"*
+    rm -rf "$store_path/$1" "$store_path/$1@"* "$store_path/$1#"*
     echo "'$1' retiré du store"
   fi
 )

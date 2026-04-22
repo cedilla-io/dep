@@ -529,6 +529,9 @@ dep_run_user_task()(
   task="$3"
   shift 3
 
+  # `scripts_path` est un chemin vers le fichier `@scripts` (nom historique au pluriel).
+  # Ici on exécute une seule tâche utilisateur issue de ce fichier.
+
   if dep_task_needs_trust "$root" "$scripts_path"; then
     dep_is_trusted "$root" || dep_trust_prompt "$root" || return 1
   fi

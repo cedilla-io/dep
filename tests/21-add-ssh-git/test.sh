@@ -43,16 +43,17 @@ git -C "$SEED_ROOT/plugin" push -u origin main release/v1 -q
 git config --global url."file://$REMOTE_ROOT/".insteadOf git@code.test:
 
 $DEP add "code.test:acme/tool@main"
-assert ".@/tool est un symlink" 'test -L .@/tool'
-assert "contenu clone ssh sans git@" 'test "$(cat .@/tool/readme.txt)" = "tool main"'
-assert "@lock contient la source ssh sans git@" 'grep -q "code.test:acme/tool#" @lock'
+assert ".@/tool@main est un symlink" 'test -L .@/tool@main'
+assert "pas de lien court git" '! test -e .@/tool'
+assert "contenu clone ssh sans git@" 'test "$(cat .@/tool@main/readme.txt)" = "tool main"'
+assert "@lock contient la source ssh sans git@ + ref" 'grep -q "code.test:acme/tool@main#" @lock'
 
 $DEP add "git@code.test:acme/plugin.git@release/v1"
-assert ".@/plugin est un symlink" 'test -L .@/plugin'
 assert ".@/plugin@release_v1 est un symlink" 'test -L .@/plugin@release_v1'
+assert "pas de lien court git" '! test -e .@/plugin'
 assert "nom dérivé sans suffixe .git" '! test -e .@/plugin.git'
-assert "contenu clone ssh avec branche slash" 'test "$(cat .@/plugin/version.txt)" = "plugin release"'
-assert "@lock contient la source ssh avec git@" 'grep -q "git@code.test:acme/plugin.git#" @lock'
+assert "contenu clone ssh avec branche slash" 'test "$(cat .@/plugin@release_v1/version.txt)" = "plugin release"'
+assert "@lock contient la source ssh avec git@ + ref" 'grep -q "git@code.test:acme/plugin.git@release/v1#" @lock'
 $DEP custom_command
 assert "custom command dep exécutée sans ambiguïté" 'test "$(cat custom-command.txt)" = "plugin task ok"'
 

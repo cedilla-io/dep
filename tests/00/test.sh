@@ -103,16 +103,16 @@ git_commit_all "$REPOS/tool" 'init tool'
 cd "$WORKSPACE"
 $DEP sync
 
-assert 'root expose demo-app api tool' 'test -L .@/demo-app && test -L .@/api && test -L .@/tool'
-assert 'root expose shared helpers theme' 'test -L .@/shared && test -L .@/helpers && test -L .@/theme'
+assert 'root expose demo-app api tool' 'test -L .@/demo-app && test -L .@/api && test -L .@/tool@main'
+assert 'root expose shared helpers theme' 'test -L .@/shared && test -L .@/helpers@main && test -L .@/theme@stable'
 assert 'demo-app voit shared' 'test "$(cat apps/demo-app/.@/shared/shared.txt)" = "shared package"'
-assert 'demo-app voit helpers git' 'test "$(cat apps/demo-app/.@/helpers/helper.txt)" = "helpers package"'
-assert 'api voit theme git' 'test "$(cat services/api/.@/theme/theme.txt)" = "theme stable"'
-assert 'tool git voit helpers git' 'test "$(cat .@/tool/.@/helpers/helper.txt)" = "helpers package"'
-assert 'helpers git voit theme git' 'test "$(cat .@/helpers/.@/theme/theme.txt)" = "theme stable"'
-assert 'theme git voit helpers git' 'test "$(cat .@/theme/.@/helpers/helper.txt)" = "helpers package"'
+assert 'demo-app voit helpers git' 'test "$(cat apps/demo-app/.@/helpers@main/helper.txt)" = "helpers package"'
+assert 'api voit theme git' 'test "$(cat services/api/.@/theme@stable/theme.txt)" = "theme stable"'
+assert 'tool git voit helpers git' 'test "$(cat .@/tool@main/.@/helpers@main/helper.txt)" = "helpers package"'
+assert 'helpers git voit theme git' 'test "$(cat .@/helpers@main/.@/theme@stable/theme.txt)" = "theme stable"'
+assert 'theme git voit helpers git' 'test "$(cat .@/theme@stable/.@/helpers@main/helper.txt)" = "helpers package"'
 assert 'store contient des clones git' 'ls -d .@/tool#* .@/helpers#* .@/theme#* >/dev/null 2>&1'
-assert 'hook install de tool exécuté' 'test -f .@/tool/.hook-ran'
+assert 'hook install de tool exécuté' 'test -f .@/tool@main/.hook-ran'
 
 out=$($DEP list)
 assert 'list affiche demo-app' 'echo "$out" | grep -q "demo-app.*ok"'

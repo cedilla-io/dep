@@ -7,11 +7,16 @@ dep_sync()(
   cd "$root"
 
   hooks_file="$(dep_store_path "$(pwd)")/.hooks_pending"
+  links_file="$(dep_store_path "$(pwd)")/.links_desired"
+  hashes_file="$(dep_store_path "$(pwd)")/.hashes_desired"
   mkdir -p "$(dep_store_path "$(pwd)")"
-  trap 'rm -f "$hooks_file"' EXIT
+  trap 'rm -f "$hooks_file" "$links_file" "$hashes_file"' EXIT
   : > "$hooks_file"
+  : > "$links_file"
+  : > "$hashes_file"
 
-  dep_sync_tree "$(pwd)" "$(pwd)" "" "$hooks_file" || return 1
+  dep_sync_tree "$(pwd)" "$(pwd)" "" "$hooks_file" "$links_file" "$hashes_file" || return 1
+  dep_sync_prune_store "$(pwd)" "$links_file" "$hashes_file"
 
   trusted=""
   while IFS= read -r entry; do
@@ -36,8 +41,63 @@ dep_sync()(
   done < "$hooks_file"
 )
 
+dep_sync_line_in_file()(
+  needle="$1"
+  file="$2"
+  grep -Fqx "$needle" "$file" 2>/dev/null
+)
+
+dep_sync_prune_store()(
+  root_dir="$1"
+  links_file="$2"
+  hashes_file="$3"
+  store=$(dep_store_path "$root_dir")
+
+  test -d "$store" || return 0
+
+  for entry in "$store"/*; do
+    base=${entry##*/}
+    case "$base" in
+      ''|'.hooks_pending'|'.links_desired'|'.hashes_desired'|"$DEP_TRUST_FILE") continue ;;
+      .*) continue ;;
+      *"#"*)
+        dep_sync_line_in_file "$base" "$hashes_file" || rm -rf "$entry"
+        ;;
+      *)
+        dep_sync_line_in_file "$base" "$links_file" || rm -rf "$entry"
+        ;;
+    esac
+  done
+)
+
+dep_sync_lock_hash_for_dep()(
+  dep_entry="$1"
+  lock_entries="${2-}"
+
+  test -n "$lock_entries" || return 1
+
+  nl='
+'
+  old_ifs=$IFS
+  IFS=$nl
+  set -f
+  for lock_entry in $lock_entries; do
+    case "$lock_entry" in
+      "$dep_entry"#*)
+        printf '%s\n' "${lock_entry##*#}"
+        set +f
+        IFS=$old_ifs
+        return 0
+        ;;
+    esac
+  done
+  set +f
+  IFS=$old_ifs
+  return 1
+)
+
 dep_sync_tree()(
-  pkg_dir="$1" root_dir="$2" visited="$3" hooks_file="$4"
+  pkg_dir="$1" root_dir="$2" visited="$3" hooks_file="$4" links_file="$5" hashes_file="$6"
 
   case ":$visited:" in *":$pkg_dir:"*) return ;; esac
   visited="$visited:$pkg_dir"
@@ -56,6 +116,10 @@ dep_sync_tree()(
   fi
 
   deps=$(dep_read_entries "$manifest_path")
+  lock_entries=""
+  if test -f "$lockfile_path"; then
+    lock_entries=$(dep_read_entries "$lockfile_path")
+  fi
 
   mkdir -p "$(dep_store_path "$root_dir")"
   if test "$pkg_dir" != "$root_dir"; then
@@ -80,6 +144,7 @@ dep_sync_tree()(
       esac
 
       dep_link "$target" "$(dep_store_entry_path "$root_dir" "$name")"
+      printf '%s\n' "$name" >> "$links_file"
 
       new_locks=$(dep_append_line "$new_locks" "$dep")
       resolved_links=$(dep_append_line "$resolved_links" "$name")
@@ -88,17 +153,22 @@ dep_sync_tree()(
       ref_name="${ref:-HEAD}"
       ref_key=$(dep_ref_key "$ref_name")
       name_ref="$name@$ref_key"
+      hash=""
+
+      if locked_hash=$(dep_sync_lock_hash_for_dep "$dep" "$lock_entries"); then
+        hash="$locked_hash"
+      fi
 
       case "$source" in
         /*)
           local_source=$(dep_abs_path "$source") || return 1
           source_url="file://$local_source"
-          hash=$(git -C "$local_source" rev-parse "$ref_name")
+          test -n "$hash" || hash=$(git -C "$local_source" rev-parse "$ref_name")
           ;;
         ./*|../*)
           local_source=$(dep_abs_path "$pkg_dir/$source") || return 1
           source_url="file://$local_source"
-          hash=$(git -C "$local_source" rev-parse "$ref_name")
+          test -n "$hash" || hash=$(git -C "$local_source" rev-parse "$ref_name")
           ;;
         *)
           if ! dep_is_ssh_source "$source"; then
@@ -107,24 +177,22 @@ dep_sync_tree()(
             return 1
           fi
           source_url=$(dep_git_remote_url "$source") || return 1
-          hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" | cut -f1 | head -1)
+          test -n "$hash" || hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" | cut -f1 | head -1)
           ;;
       esac
 
       store=$(dep_store_entry_path "$root_dir" "$name#$hash")
 
       if ! test -d "$store"; then
-        if test -n "$ref"; then
-          dep_git "$pkg_dir" clone --depth 1 --branch "$ref" --recurse-submodules --shallow-submodules "$source_url" "$store"
-        else
-          dep_git "$pkg_dir" clone --depth 1 --recurse-submodules --shallow-submodules "$source_url" "$store"
-        fi
+        dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
+        dep_git "$pkg_dir" -C "$store" checkout -q "$hash" || return 1
       fi
 
       dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name_ref")"
-      dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name")"
+      printf '%s\n' "$name_ref" >> "$links_file"
+      printf '%s\n' "$name#$hash" >> "$hashes_file"
 
-      new_locks=$(dep_append_line "$new_locks" "$source#$hash")
+      new_locks=$(dep_append_line "$new_locks" "$dep#$hash")
       resolved_links=$(dep_append_line "$resolved_links" "$name_ref")
     fi
   done
@@ -144,7 +212,7 @@ dep_sync_tree()(
     test -L "$dep_path" || test -d "$dep_path" || continue
     real_path=$(dep_resolve_dir "$dep_path") || continue
     if test -f "$(dep_manifest_path "$real_path")"; then
-      dep_sync_tree "$real_path" "$root_dir" "$visited" "$hooks_file"
+      dep_sync_tree "$real_path" "$root_dir" "$visited" "$hooks_file" "$links_file" "$hashes_file"
       dep_proto=fs
       case "$link_name" in *"@"*) dep_proto=git ;; esac
       if dep_has_scripts "$real_path"; then

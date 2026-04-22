@@ -32,29 +32,30 @@ unset DEP_AUTO_TRUST
 $DEP global init
 $DEP global add "$WORK/repos/global-tool@master" </dev/null 2>/dev/null || true
 
-assert "dep git globale clonée" 'test -L "$HOME/.dep/.@/global-tool"'
-assert "contenu cloné" 'test "$(cat "$HOME/.dep/.@/global-tool/tool.txt")" = "global tool content"'
+assert "dep git globale clonée" 'test -L "$HOME/.dep/.@/global-tool@master"'
+assert "pas de lien court git global" '! test -e "$HOME/.dep/.@/global-tool"'
+assert "contenu cloné" 'test "$(cat "$HOME/.dep/.@/global-tool@master/tool.txt")" = "global tool content"'
 assert "pas de trust" '! test -f "$HOME/.dep/.@/trust"'
-assert "hook non exécuté sans trust" '! test -f "$HOME/.dep/.@/global-tool/.hook-ran"'
+assert "hook non exécuté sans trust" '! test -f "$HOME/.dep/.@/global-tool@master/.hook-ran"'
 
 # --- avec trust : hook tourne ---
 printf 'YES\n' > "$HOME/.dep/.@/trust"
 $DEP global sync </dev/null 2>/dev/null
 
-assert "global_install exécuté avec trust" 'test -f "$HOME/.dep/.@/global-tool/.hook-ran"'
-assert "contenu hook" 'test "$(cat "$HOME/.dep/.@/global-tool/.hook-ran")" = "global-installed"'
+assert "global_install exécuté avec trust" 'test -f "$HOME/.dep/.@/global-tool@master/.hook-ran"'
+assert "contenu hook" 'test "$(cat "$HOME/.dep/.@/global-tool@master/.hook-ran")" = "global-installed"'
 
 # --- remove respecte trust ---
 $DEP global remove global-tool 2>/dev/null
-assert "hook uninstall exécuté" '! test -f "$HOME/.dep/.@/global-tool/.hook-ran"'
-assert "dep supprimée" '! test -L "$HOME/.dep/.@/global-tool"'
+assert "hook uninstall exécuté" '! test -f "$HOME/.dep/.@/global-tool@master/.hook-ran"'
+assert "dep supprimée" '! test -L "$HOME/.dep/.@/global-tool@master"'
 
 # --- auto-trust global ---
 export DEP_AUTO_TRUST=1
 $DEP global add "$WORK/repos/global-tool@master" 2>/dev/null
 
 assert "auto-trust global crée le fichier" 'test -f "$HOME/.dep/.@/trust"'
-assert "auto-trust global hook exécuté" 'test -f "$HOME/.dep/.@/global-tool/.hook-ran"'
+assert "auto-trust global hook exécuté" 'test -f "$HOME/.dep/.@/global-tool@master/.hook-ran"'
 
 # --- global list ---
 out=$($DEP global list)
