@@ -58,8 +58,12 @@ dep_sync_tree()(
   deps=$(dep_read_entries "$manifest_path")
 
   mkdir -p "$(dep_store_path "$root_dir")"
+  if test "$pkg_dir" != "$root_dir"; then
+    dep_replace_with_link "$(dep_store_path "$root_dir")" "$(dep_store_path "$pkg_dir")"
+  fi
 
   new_locks=""
+  resolved_links=""
   nl='
 '
   old_ifs=$IFS
@@ -77,13 +81,13 @@ dep_sync_tree()(
 
       dep_link "$target" "$(dep_store_entry_path "$root_dir" "$name")"
 
-      test "$pkg_dir" != "$root_dir" &&
-        dep_link "$target" "$(dep_store_entry_path "$pkg_dir" "$name")"
-
       new_locks=$(dep_append_line "$new_locks" "$dep")
+      resolved_links=$(dep_append_line "$resolved_links" "$name")
 
     elif test "$proto" = "git"; then
       ref_name="${ref:-HEAD}"
+      ref_key=$(dep_ref_key "$ref_name")
+      name_ref="$name@$ref_key"
 
       case "$source" in
         /*)
@@ -117,12 +121,11 @@ dep_sync_tree()(
         fi
       fi
 
+      dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name_ref")"
       dep_link "$store" "$(dep_store_entry_path "$root_dir" "$name")"
 
-      test "$pkg_dir" != "$root_dir" &&
-        dep_link "$store" "$(dep_store_entry_path "$pkg_dir" "$name")"
-
       new_locks=$(dep_append_line "$new_locks" "$source#$hash")
+      resolved_links=$(dep_append_line "$resolved_links" "$name_ref")
     fi
   done
   set +f
@@ -135,16 +138,17 @@ dep_sync_tree()(
   old_ifs=$IFS
   IFS=$nl
   set -f
-  for dep in $new_locks; do
-    test -n "$dep" || continue
-    eval "$(dep_parse "$dep")"
-    dep_path=$(dep_store_entry_path "$root_dir" "$name")
+  for link_name in $resolved_links; do
+    test -n "$link_name" || continue
+    dep_path=$(dep_store_entry_path "$root_dir" "$link_name")
     test -L "$dep_path" || test -d "$dep_path" || continue
     real_path=$(dep_resolve_dir "$dep_path") || continue
     if test -f "$(dep_manifest_path "$real_path")"; then
       dep_sync_tree "$real_path" "$root_dir" "$visited" "$hooks_file"
+      dep_proto=fs
+      case "$link_name" in *"@"*) dep_proto=git ;; esac
       if dep_has_scripts "$real_path"; then
-        printf '%s %s\n' "$proto" "$real_path" >> "$hooks_file"
+        printf '%s %s\n' "$dep_proto" "$real_path" >> "$hooks_file"
       fi
     fi
   done

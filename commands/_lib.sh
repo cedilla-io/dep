@@ -356,6 +356,19 @@ dep_link()(
   ln -s "$target" "$link"
 )
 
+dep_replace_with_link()(
+  target="$1" link="$2"
+  if test -e "$link" || test -L "$link"; then
+    rm -rf "$link"
+  fi
+  dep_link "$target" "$link"
+)
+
+dep_ref_key()(
+  ref="$1"
+  printf '%s\n' "$ref" | sed 's/[^a-zA-Z0-9._-]/_/g'
+)
+
 # --- @scripts ---
 
 dep_is_reserved()(
@@ -430,7 +443,7 @@ dep_dep_user_task_matches()(
   for entry in "$store"/*; do
     dep_name=${entry##*/}
     case "$dep_name" in
-      ''|.*|*"#"*) continue ;;
+      ''|.*|*"#"*|*"@"*) continue ;;
     esac
     test -L "$entry" || test -d "$entry" || continue
     dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
@@ -450,7 +463,7 @@ dep_dep_user_tasks()(
   for entry in "$store"/*; do
     dep_name=${entry##*/}
     case "$dep_name" in
-      ''|.*|*"#"*) continue ;;
+      ''|.*|*"#"*|*"@"*) continue ;;
     esac
     test -L "$entry" || test -d "$entry" || continue
     dep_dir=$(dep_resolve_dir "$entry" 2>/dev/null) || continue
