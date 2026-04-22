@@ -25,6 +25,11 @@ git -C "$SEED_ROOT/tool" push -u origin main -q
 git init "$SEED_ROOT/plugin" -q
 git -C "$SEED_ROOT/plugin" checkout -b main -q
 printf 'plugin main\n' > "$SEED_ROOT/plugin/version.txt"
+cat > "$SEED_ROOT/plugin/@scripts" <<'SH'
+custom_command()(
+  printf 'plugin task ok\n' > custom-command.txt
+)
+SH
 git -C "$SEED_ROOT/plugin" add -A
 git -C "$SEED_ROOT/plugin" commit -m "init plugin" -q
 git -C "$SEED_ROOT/plugin" checkout -b release/v1 -q
@@ -44,8 +49,11 @@ assert "@lock contient la source ssh sans git@" 'grep -q "code.test:acme/tool#" 
 
 $DEP add "git@code.test:acme/plugin.git@release/v1"
 assert ".@/plugin est un symlink" 'test -L .@/plugin'
+assert ".@/plugin@release_v1 est un symlink" 'test -L .@/plugin@release_v1'
 assert "nom dérivé sans suffixe .git" '! test -e .@/plugin.git'
 assert "contenu clone ssh avec branche slash" 'test "$(cat .@/plugin/version.txt)" = "plugin release"'
 assert "@lock contient la source ssh avec git@" 'grep -q "git@code.test:acme/plugin.git#" @lock'
+$DEP custom_command
+assert "custom command dep exécutée sans ambiguïté" 'test "$(cat custom-command.txt)" = "plugin task ok"'
 
 unset GIT_CONFIG_GLOBAL

@@ -77,6 +77,58 @@ projet/
     lib#abc1/
 ```
 
+### Store partagé (règle unique)
+
+`dep` utilise **un seul store** par projet : `projet/.@/`.
+
+- Pour la racine du projet, `.@/` est un dossier réel.
+- Pour chaque dépendance qui a son propre `@manifest`, son `.@/` est un **lien symbolique unique** vers le store racine.
+- `dep` n'écrit pas de mini-store imbriqué dans les deps (`dep/.@/lib -> ...`), afin d'éviter les arborescences éclatées.
+
+Concrètement :
+
+```
+.@/
+  somedep@v1 -> ./somedep#<hash-v1>
+  somedep@v2 -> ./somedep#<hash-v2>
+  somedep -> ./somedep#<hash-canonique>
+  somedep#<hash>/
+    .@/ -> ../../.@
+```
+
+## Résolution et conflits de versions
+
+Politique actuelle (simple et explicite) :
+
+- Toutes les versions git demandées sont clonées dans le store (`name#hash`).
+- Chaque dépendance git résolue crée un alias branché : `.@/name@ref -> .@/name#hash`.
+- Un alias court `.@/name` est aussi maintenu pour compatibilité (il reste unique et peut donc être écrasé par la dernière résolution).
+- En cas de conflit (`mod-a` demande `lib@v1`, `mod-b` demande `lib@v2`), les deux hashes **et** les deux alias `lib@v1` / `lib@v2` coexistent.
+
+Implication : la gestion fine de compatibilité (ex: semver entre modules) reste volontairement à la charge de l'utilisateur/projet.
+
+## Changement de @manifest : algorithme de sync (haut niveau)
+
+À chaque `dep sync` :
+
+1. Lire `@manifest` (texte brut), valider la version minimale de `dep`.
+2. Résoudre chaque entrée :
+   - fs: créer/mettre à jour `.@/name -> target`.
+   - git: résoudre `ref -> hash`, cloner `name#hash` si absent, puis pointer `.@/name@ref -> .@/name#hash` (et `.@/name` pour compat).
+3. Réécrire `@lock` depuis l'état réellement résolu.
+4. Descendre récursivement dans les deps ayant un `@manifest`.
+5. Exécuter les hooks `install` après phase de trust (pour les deps git).
+
+Effet pratique : toute modification du `@manifest` est détectée/recalculée automatiquement par la reconstruction du lock et des liens pendant `sync`.
+
+## Projet sans Git
+
+`dep` fonctionne sans dépôt Git local :
+
+- `@manifest` / `@lock` restent les sources de vérité.
+- Si le projet n'est pas versionné, ces fichiers continuent de fonctionner de la même manière.
+- Recommandation : garder `.@/` ignoré (fichiers générés), et versionner `@manifest` (+ `@lock` si vous voulez figer les hashes).
+
 ## @manifest
 
 ```
