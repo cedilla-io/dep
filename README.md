@@ -11,13 +11,6 @@ curl  -sSL https://raw.githubusercontent.com/cedilla-io/dep/refs/heads/master/in
 Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une ligne dans le rc du shell courant (bash, zsh, fish ou `.profile`).
 
 
-## Demo
-
-```bash
-git clone 
-
-```
-
 ## Toutes les commandes
 
 | Commande | Description |
