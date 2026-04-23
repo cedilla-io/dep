@@ -46,7 +46,7 @@ ensure_install_sources()(
   trap 'rm -rf "$tmp"' EXIT INT TERM
 
   echo "sources dep introuvables localement, récupération depuis $DEP_REPO_URL"
-  git clone --depth 1 "$DEP_REPO_URL" "$tmp/src"
+  git clone --recursive "$DEP_REPO_URL" "$tmp/src"
 
   sh "$tmp/src/install.sh"
   exit 0
