@@ -5,11 +5,17 @@ DEP_MARKER_START="# --- dep ---"
 DEP_MARKER_END="# --- /dep ---"
 DEP_REPO_URL="${DEP_REPO_URL:-git@github.com:cedilla-io/dep.git}"
 
+usage() {
+  echo "usage: $0 [-l]" >&2
+  echo "  -l    install from the local repository checkout" >&2
+  exit 1
+}
+
 profile_inject()(
   file="$1"
   content="$2"
 
-  grep -qF "$DEP_MARKER_START" "$file" 2>/dev/null && return 0
+  grep -qF "$DEP_MARKER_START" "$file" 2>/dev/null && exit 0
 
   mkdir -p "$(dirname "$file")"
   touch "$file"
@@ -38,29 +44,45 @@ detect_shell()(
 ensure_install_sources()(
   dir="$1"
 
-  test -f "$dir/dep" && test -f "$dir/VERSION" && test -f "$dir/commands/sync.sh" && return 0
-
-  tmp="${TMPDIR:-/tmp}/dep.install.$$"
-  rm -rf "$tmp"
-  mkdir -p "$tmp"
-  trap 'rm -rf "$tmp"' EXIT INT TERM
-
-  echo "sources dep introuvables localement, récupération depuis $DEP_REPO_URL"
-  git clone --recursive "$DEP_REPO_URL" "$tmp/src"
-
-  sh "$tmp/src/install.sh"
+  test -f "$dir/dep" &&
+  test -f "$dir/VERSION" &&
+  test -f "$dir/commands/sync.sh" &&
+  test -f "$dir/uninstall.sh" &&
+  test -f "$dir/config.sh" &&
   exit 0
+
+  echo "invalid install source directory: $dir" >&2
+  echo "missing one or more required files (dep, VERSION, commands/sync.sh, uninstall.sh, config.sh)" >&2
+  exit 1
 )
 
 main()(
-  if ! test -z "$1" && test "$1" = "-l"; then
-    dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  case "$#" in
+    0)
+      mode="remote"
+      ;;
+    1)
+      test "$1" = "-l" || usage
+      mode="local"
+      ;;
+    *)
+      usage
+      ;;
+  esac
+
+  tmp=""
+  if test "$mode" = "local"; then
+    dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   else
-    dir=$(mktemp -d)
-  fi;
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/dep.install.XXXXXX")
+    trap 'test -n "$tmp" && rm -rf "$tmp"' EXIT INT TERM HUP
+    dir="$tmp/src"
+
+    echo "sources dep introuvables localement, récupération depuis $DEP_REPO_URL"
+    git clone --recursive "$DEP_REPO_URL" "$dir"
+  fi
 
   ensure_install_sources "$dir"
-
 
   dest="${HOME}/.dep"
   bin="${HOME}/.local/bin"
@@ -80,12 +102,17 @@ main()(
   cp "$dir/dep" "$dest/dep"
   cp "$dir/VERSION" "$dest/VERSION"
   cp "$dir"/commands/*.sh "$dest/commands/"
-  cp "$dir/known_hosts" "$dest/known_hosts"
+  if test -f "$dir/known_hosts"; then
+    cp "$dir/known_hosts" "$dest/known_hosts"
+  fi
   if ! test -f "$dest/config.sh"; then
     cp "$dir/config.sh" "$dest/config.sh"
   fi
   cp "$dir/uninstall.sh" "$dest/uninstall.sh"
+
   chmod +x "$dest/dep"
+  chmod +x "$dest"/commands/*.sh
+  chmod +x "$dest/uninstall.sh"
 
   mkdir -p "$bin"
   rm -f "$bin/dep"
@@ -101,16 +128,29 @@ main()(
       printf '# généré par dep\n'
       printf 'export PATH="%s:$PATH"\n' "$bin"
     } > "$dest/env.sh"
+    chmod +x "$dest/env.sh"
   fi
 
   source_line=". \"$dest/env.sh\""
   shell=$(detect_shell)
 
   case "$shell" in
-    bash) profile_inject "$HOME/.bashrc"  "$source_line"; activate="source ~/.dep/env.sh" ;;
-    zsh)  profile_inject "$HOME/.zshrc"   "$source_line"; activate="source ~/.dep/env.sh" ;;
-    fish) fish_install   "$bin";                          activate="source ~/.config/fish/conf.d/dep.fish" ;;
-    *)    profile_inject "$HOME/.profile" "$source_line"; activate="source ~/.dep/env.sh" ;;
+    bash)
+      profile_inject "$HOME/.bashrc" "$source_line"
+      activate=". ~/.dep/env.sh"
+      ;;
+    zsh)
+      profile_inject "$HOME/.zshrc" "$source_line"
+      activate=". ~/.dep/env.sh"
+      ;;
+    fish)
+      fish_install "$bin"
+      activate="source ~/.config/fish/conf.d/dep.fish"
+      ;;
+    *)
+      profile_inject "$HOME/.profile" "$source_line"
+      activate=". ~/.dep/env.sh"
+      ;;
   esac
 
   echo "dep installé dans $bin/dep"
