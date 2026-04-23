@@ -30,7 +30,11 @@ git -C "$WORK/repos/global-tool" commit -m "init" -q
 unset DEP_AUTO_TRUST
 
 $DEP global init
-$DEP global add "$WORK/repos/global-tool@master" </dev/null 2>/dev/null || true
+if command -v setsid >/dev/null 2>&1; then
+  setsid "$DEP" global add "$WORK/repos/global-tool@master" </dev/null 2>/dev/null || true
+else
+  $DEP global add "$WORK/repos/global-tool@master" </dev/null 2>/dev/null || true
+fi
 
 assert "dep git globale clonée" 'test -L "$HOME/.dep/.@/global-tool@master"'
 assert "pas de lien court git global" '! test -e "$HOME/.dep/.@/global-tool"'
