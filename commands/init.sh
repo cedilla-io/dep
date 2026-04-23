@@ -16,4 +16,13 @@ dep_init()(
   mkdir -p "$store_path"
   dep_write_manifest "$manifest_path" "$DEP_VERSION" ""
   echo "initialisé (@manifest créé)"
+
+  if ! test -f ".gitignore"; then
+      touch ".gitignore";
+  fi;
+  lc=$(grep ".@" .gitignore  | wc -l)
+
+  if test "$lc" = "0"; then
+    echo ".@" >> ".gitignore";
+  fi;
 )
