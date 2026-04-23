@@ -3,7 +3,7 @@ set -eu
 
 DEP_MARKER_START="# --- dep ---"
 DEP_MARKER_END="# --- /dep ---"
-DEP_REPO_URL="${DEP_REPO_URL:-https://github.com/dep-sh/dep.git}"
+DEP_REPO_URL="${DEP_REPO_URL:-git@github.com:cedilla-io/dep.git}"
 
 profile_inject()(
   file="$1"
