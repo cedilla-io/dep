@@ -53,8 +53,14 @@ ensure_install_sources()(
 )
 
 main()(
-  dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  if test "$1" = "-l"; then
+    dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  else
+    dir=$(mktemp -d)
+  fi;
+
   ensure_install_sources "$dir"
+
 
   dest="${HOME}/.dep"
   bin="${HOME}/.local/bin"
