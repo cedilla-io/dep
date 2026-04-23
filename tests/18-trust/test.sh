@@ -19,13 +19,17 @@ git -C "$WORK/repos/trust-pkg" commit -m "init" -q
 write_manifest "$WORK/t18/@manifest" "$WORK/repos/trust-pkg@master"
 cd "$WORK/t18"
 
-$DEP sync </dev/null 2>/dev/null || true
+if command -v setsid >/dev/null 2>&1; then
+  setsid "$DEP" sync </dev/null 2>/dev/null || true
+else
+  $DEP sync </dev/null 2>/dev/null || true
+fi
 
 assert "dep clonée" 'test -L .@/trust-pkg@master'
 assert "pas de fichier trust" '! test -f .@/trust'
 assert "hook non exécuté sans trust" '! test -f .@/trust-pkg@master/.hook-ran'
 
-if command -v script >/dev/null 2>&1; then
+if command -v script >/dev/null 2>&1 && ! test -t 0; then
   write_manifest "$WORK/t18tty/@manifest" "$WORK/repos/trust-pkg@master"
   cd "$WORK/t18tty"
 

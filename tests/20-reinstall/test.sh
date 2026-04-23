@@ -27,7 +27,7 @@ git -C "$WORK/repos/reinstall-tool" commit -m "init" -q
 
 # première install
 export DEP_AUTO_TRUST=1
-sh "$DEP_ROOT/install.sh" 2>/dev/null
+sh "$DEP_ROOT/install.sh" -l 2>/dev/null
 
 "$HOME/.local/bin/dep" global init 2>/dev/null
 "$HOME/.local/bin/dep" global add "$WORK/repos/reinstall-tool@master" 2>/dev/null
@@ -35,7 +35,7 @@ sh "$DEP_ROOT/install.sh" 2>/dev/null
 assert "marker créé par global_install" 'test -f "$HOME/.dep-marker"'
 
 # réinstallation — doit exécuter global_uninstall puis réinstaller
-sh "$DEP_ROOT/install.sh" 2>/dev/null
+sh "$DEP_ROOT/install.sh" -l 2>/dev/null
 
 assert "global_uninstall exécuté lors de la réinstall" '! test -f "$HOME/.dep-marker"'
 assert "dep toujours installé" 'test -x "$HOME/.local/bin/dep"'
