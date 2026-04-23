@@ -53,7 +53,7 @@ ensure_install_sources()(
 )
 
 main()(
-  if test "$1" = "-l"; then
+  if ! test -z "$1" && test "$1" = "-l"; then
     dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
   else
     dir=$(mktemp -d)
