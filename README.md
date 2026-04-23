@@ -5,43 +5,20 @@ Gestionnaire de dépendances shell minimaliste. POSIX `sh`, pas de runtime, pas 
 ## Installation
 
 ```sh
-curl -sSL https://raw.githubusercontent.com/dep-sh/dep/main/install.sh | sh
+curl  -sSL https://raw.githubusercontent.com/cedilla-io/dep/refs/heads/master/install.sh | sh
 ```
 
-Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une ligne dans le rc du shell courant (bash, zsh, fish ou `.profile`). Pas de `sudo`, pas de logout.
+Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une ligne dans le rc du shell courant (bash, zsh, fish ou `.profile`).
 
-Par défaut, l'installateur récupère les sources depuis `https://github.com/dep-sh/dep.git` quand il est exécuté via `curl | sh`. Override possible avec `DEP_REPO_URL`.
 
-### Depuis les sources
+## Demo
 
-```sh
-sh install.sh        # copie dans ~/.dep, lie dans ~/.local/bin
-sh uninstall.sh      # supprime tout
+```bash
+git clone 
+
 ```
 
-### Installation stricte (serveurs privés, SSH verrouillé)
-
-```sh
-echo "gitlab.example.com ssh-ed25519 AAAA...">/tmp/k&&GIT_SSH_COMMAND="ssh -oUserKnownHostsFile=/tmp/k" git clone --depth 1 git@gitlab.example.com:group/dep.git /tmp/d&&sh /tmp/d/install.sh;rm -rf /tmp/d /tmp/k
-```
-
-Empreinte via `ssh-keyscan -t ed25519 gitlab.example.com`.
-
-Dépendances : `sh` POSIX, `git`, `sed`, `grep`.
-
-## Démarrage rapide
-
-```sh
-dep init                              # crée @manifest + .@/
-dep add ./libs/mylib                  # dep locale (symlink)
-dep add github.com:acme/tool@v1      # dep git SSH (clone shallow)
-dep sync                              # installe tout
-dep update                            # ré-résout les refs git
-dep list                              # affiche le statut
-dep remove tool                       # retire une dep
-```
-
-## Commandes
+## Toutes les commandes
 
 | Commande | Description |
 |---|---|
@@ -58,9 +35,15 @@ dep remove tool                       # retire une dep
 | `dep --trust sync` | Sync sans prompt interactif (CI) |
 | `dep --version` | Affiche la version |
 
-## Tests
 
-26 scénarios d'intégration (init, add, sync, update, remove, hooks, trust, global, etc.).
+## Notes
+
+```sh
+dep add ./libs/mylib                  # dep locale (symlink)
+dep add github.com:acme/tool@v1      # dep git SSH (clone shallow)
+```
+
+## Lancer les tests
 
 ```sh
 dash tests/run.sh
@@ -75,7 +58,7 @@ projet/
   @scripts            # hooks + tâches (seul fichier sourcé)
   @ssh                # empreintes SSH (format known_hosts)
   .@/                 # store (gitignorer)
-    lib -> lib#abc1/
+    lib@v1 -> lib#abc1/  # Dans le cas d'une dep locale sans git
     lib#abc1/
 ```
 
@@ -189,4 +172,4 @@ DEP_AUTO_TRUST=1 dep sync
 ## Documentation
 
 - [FAQ](docs/faq.md) — questions fréquentes
-- [Style](CODING-STYLE.md) — conventions de code
+- [Style](CODING_STYLE.md) — conventions de code
