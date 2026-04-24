@@ -49,5 +49,16 @@ assert "fallback: lien ref" 'test -L .@/fallback-tool@main'
 assert "fallback: contenu" 'test "$(cat .@/fallback-tool@main/version.txt)" = "fallback tool"'
 assert "fallback: lock conserve source" 'grep -q "code.test:acme/fallback-tool@main#" @lock'
 
+# 3) source implicite lockée + store supprimé => fallback clone ssh -> https
+
+fallback_lock=$(sed -n 's|^\(code.test:acme/fallback-tool@main#[^[:space:]]*\)$|\1|p' @lock)
+fallback_hash=${fallback_lock##*#}
+rm -rf ".@/fallback-tool#$fallback_hash" ".@/fallback-tool@main"
+
+$DEP sync
+assert "fallback locke: lien ref" 'test -L .@/fallback-tool@main'
+assert "fallback locke: contenu" 'test "$(cat .@/fallback-tool@main/version.txt)" = "fallback tool"'
+assert "fallback locke: lock conserve source" 'grep -q "code.test:acme/fallback-tool@main#" @lock'
+
 unset GIT_CONFIG_GLOBAL
 unset GIT_SSH_COMMAND

@@ -234,10 +234,11 @@ dep_sync_tree()(
             return 1
           fi
           if test -n "$hash"; then
-            source_url=$(dep_git_source_candidates "$source" | head -1)
+            source_url=""
           else
             resolved=$(dep_git_resolve_remote "$pkg_dir" "$source" "$ref_name") || {
-              echo "impossible de résoudre $source ($ref_name) via ssh/https"
+              candidates=$(dep_git_candidates_join "$source")
+              echo "impossible de résoudre $source ($ref_name) via candidats git: $candidates"
               return 1
             }
             source_url=${resolved% *}
@@ -249,8 +250,18 @@ dep_sync_tree()(
       store=$(dep_store_entry_path "$root_dir" "$name#$hash")
 
       if ! test -d "$store"; then
-        dep_verbose "clone git: $source_url -> $store"
-        dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
+        if test -n "$source_url"; then
+          dep_verbose "clone git: $source_url -> $store"
+          dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
+        else
+          resolved_clone_source=$(dep_git_try_candidates "$pkg_dir" "$source" dep_git_clone_candidate "$store") || {
+            candidates=$(dep_git_candidates_join "$source")
+            echo "impossible de cloner $source via candidats git: $candidates"
+            return 1
+          }
+          source_url="$resolved_clone_source"
+          dep_verbose "clone git fallback: $source_url -> $store"
+        fi
         dep_verbose "checkout git: $name@$ref_name -> $hash"
         dep_git "$pkg_dir" -C "$store" checkout -q "$hash" || return 1
       else
