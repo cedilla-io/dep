@@ -138,10 +138,10 @@ Texte brut. Lignes `#` = commentaires.
 - `dep_repo_to_https(repo)` pour produire l'URL HTTPS.
 - `dep_git_source_candidates(source)` pour forcer un ordre de fallback.
 
-Des stratégies prêtes à l'emploi sont fournies dans `clone-strategy/`:
+Des stratégies prêtes à l'emploi sont fournies dans `clone-strategies/`:
 
-- `clone-strategy/default-dev.sh` (par défaut) : SSH puis HTTPS
-- `clone-strategy/github-ci.sh` : HTTPS tokenisé GitHub en priorité
+- `clone-strategies/default-dev.sh` (par défaut) : SSH puis HTTPS
+- `clone-strategies/github-ci.sh` : HTTPS tokenisé GitHub en priorité
 
 Exemple concret (fallback attendu) :
 

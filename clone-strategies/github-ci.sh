@@ -1,6 +1,6 @@
-# GitHub CI clone strategy: prefer tokenized HTTPS.
-# Expected env var: GITHUB_TOKEN
-# Optional fallback to SSH remains enabled.
+# GitHub CI clone strategy.
+# - With GITHUB_TOKEN: prefer tokenized HTTPS, then SSH fallback.
+# - Without GITHUB_TOKEN: prefer SSH first, then plain HTTPS fallback.
 
 dep_repo_to_ssh()(
   repo=$(dep_repo_normalize "$1")
@@ -22,7 +22,11 @@ dep_repo_to_https()(
 
   case "$host" in
     github.com)
-      printf 'https://x-access-token:%s@%s/%s\n' "${GITHUB_TOKEN:-}" "$host" "$path"
+      if test -n "${GITHUB_TOKEN:-}"; then
+        printf 'https://x-access-token:%s@%s/%s\n' "$GITHUB_TOKEN" "$host" "$path"
+      else
+        printf 'https://%s/%s\n' "$host" "$path"
+      fi
       ;;
     *)
       printf 'https://%s/%s\n' "$host" "$path"
@@ -43,8 +47,13 @@ dep_git_source_candidates()(
     *:*/*)
       https_url=$(dep_repo_to_https "$source") || return 1
       ssh_url=$(dep_repo_to_ssh "$source") || return 1
-      printf '%s\n' "$https_url"
-      test "$ssh_url" = "$https_url" || printf '%s\n' "$ssh_url"
+      if test -n "${GITHUB_TOKEN:-}"; then
+        printf '%s\n' "$https_url"
+        test "$ssh_url" = "$https_url" || printf '%s\n' "$ssh_url"
+      else
+        printf '%s\n' "$ssh_url"
+        test "$https_url" = "$ssh_url" || printf '%s\n' "$https_url"
+      fi
       ;;
     *)
       return 1
