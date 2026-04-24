@@ -262,11 +262,27 @@ dep_is_ssh_source()(
   source=$(dep_trim_entry "$1")
 
   case "$source" in
+    ssh://*/*) return 0 ;;
     git@*:*/*) return 0 ;;
     /*|./*|../*) return 1 ;;
     *:*/*) return 0 ;;
     *) return 1 ;;
   esac
+)
+
+dep_is_https_source()(
+  source=$(dep_trim_entry "$1")
+  case "$source" in
+    https://*/*|http://*/*) return 0 ;;
+    *) return 1 ;;
+  esac
+)
+
+dep_is_git_remote_source()(
+  source=$(dep_trim_entry "$1")
+  dep_is_ssh_source "$source" && return 0
+  dep_is_https_source "$source" && return 0
+  return 1
 )
 
 dep_parse()(
@@ -309,7 +325,7 @@ dep_parse()(
     fi
   fi
 
-  if test -n "$ref" || dep_is_ssh_source "$source"; then
+  if test -n "$ref" || dep_is_git_remote_source "$source"; then
     proto=git
   else
     proto=fs
@@ -685,10 +701,119 @@ dep_git_remote_url()(
   source=$(dep_trim_entry "$1")
 
   case "$source" in
+    https://*/*|http://*/*) printf '%s\n' "$source" ;;
+    ssh://*/*) printf '%s\n' "$source" ;;
     git@*:*/*) printf '%s\n' "$source" ;;
     *:*/*) printf 'git@%s\n' "$source" ;;
     *) return 1 ;;
   esac
+)
+
+if ! command -v dep_repo_normalize >/dev/null 2>&1; then
+  dep_repo_normalize()(
+    source=$(dep_trim_entry "$1")
+
+    case "$source" in
+      git@*:*/*)
+        host=${source#git@}
+        host=${host%%:*}
+        path=${source#*:}
+        printf '%s/%s\n' "$host" "$path"
+        ;;
+      ssh://*)
+        raw=${source#ssh://}
+        raw=${raw#*@}
+        host=${raw%%/*}
+        path=${raw#*/}
+        printf '%s/%s\n' "$host" "$path"
+        ;;
+      https://*|http://*)
+        raw=${source#*://}
+        raw=${raw#*@}
+        host=${raw%%/*}
+        path=${raw#*/}
+        printf '%s/%s\n' "$host" "$path"
+        ;;
+      *:*/*)
+        host=${source%%:*}
+        path=${source#*:}
+        printf '%s/%s\n' "$host" "$path"
+        ;;
+      *)
+        printf '%s\n' "$source"
+        ;;
+    esac
+  )
+fi
+
+if ! command -v dep_repo_to_ssh >/dev/null 2>&1; then
+  dep_repo_to_ssh()(
+    repo=$(dep_repo_normalize "$1")
+    host=${repo%%/*}
+    path=${repo#*/}
+    case "$path" in
+      "$repo") return 1 ;;
+      *) printf 'git@%s:%s\n' "$host" "$path" ;;
+    esac
+  )
+fi
+
+if ! command -v dep_repo_to_https >/dev/null 2>&1; then
+  dep_repo_to_https()(
+    repo=$(dep_repo_normalize "$1")
+    host=${repo%%/*}
+    path=${repo#*/}
+    case "$path" in
+      "$repo") return 1 ;;
+      *) printf 'https://%s/%s\n' "$host" "$path" ;;
+    esac
+  )
+fi
+
+if ! command -v dep_git_source_candidates >/dev/null 2>&1; then
+  dep_git_source_candidates()(
+    source=$(dep_trim_entry "$1")
+
+    case "$source" in
+      git@*:*/*|ssh://*/*|https://*/*|http://*/*)
+        dep_git_remote_url "$source"
+        return
+        ;;
+      *:*/*)
+        ssh_url=$(dep_repo_to_ssh "$source") || return 1
+        https_url=$(dep_repo_to_https "$source") || return 1
+        printf '%s\n' "$ssh_url"
+        test "$https_url" = "$ssh_url" || printf '%s\n' "$https_url"
+        return
+        ;;
+    esac
+
+    return 1
+  )
+fi
+
+dep_git_resolve_remote()(
+  pkg_dir="$1"
+  source="$2"
+  ref_name="$3"
+  candidates=$(dep_git_source_candidates "$source") || return 1
+
+  nl='
+'
+  old_ifs=$IFS
+  IFS=$nl
+  set -f
+  for source_url in $candidates; do
+    hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" 2>/dev/null | cut -f1 | head -1)
+    test -n "$hash" || continue
+    printf '%s %s\n' "$source_url" "$hash"
+    set +f
+    IFS=$old_ifs
+    return 0
+  done
+  set +f
+  IFS=$old_ifs
+  return 1
 )
 
 dep_git()(
