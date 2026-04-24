@@ -792,10 +792,17 @@ if ! command -v dep_git_source_candidates >/dev/null 2>&1; then
   )
 fi
 
-dep_git_resolve_remote()(
+dep_git_candidates_join()(
+  source="$1"
+  dep_git_source_candidates "$source" | tr '\n' ',' | sed 's/,$//;s/,/, /g'
+)
+
+dep_git_try_candidates()(
   pkg_dir="$1"
   source="$2"
-  ref_name="$3"
+  op="$3"
+  shift 3
+
   candidates=$(dep_git_source_candidates "$source") || return 1
 
   nl='
@@ -804,15 +811,52 @@ dep_git_resolve_remote()(
   IFS=$nl
   set -f
   for source_url in $candidates; do
-    hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" 2>/dev/null | cut -f1 | head -1)
-    test -n "$hash" || continue
-    printf '%s %s\n' "$source_url" "$hash"
-    set +f
-    IFS=$old_ifs
-    return 0
+    if "$op" "$pkg_dir" "$source_url" "$@"; then
+      printf '%s\n' "$source_url"
+      set +f
+      IFS=$old_ifs
+      return 0
+    fi
   done
   set +f
   IFS=$old_ifs
+
+  return 1
+)
+
+dep_git_probe_ref_candidate()(
+  pkg_dir="$1"
+  source_url="$2"
+  ref_name="$3"
+  hash_file="$4"
+
+  hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" 2>/dev/null | cut -f1 | head -1)
+  test -n "$hash" || return 1
+  printf '%s\n' "$hash" > "$hash_file"
+)
+
+dep_git_clone_candidate()(
+  pkg_dir="$1"
+  source_url="$2"
+  store="$3"
+
+  dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store"
+)
+
+dep_git_resolve_remote()(
+  pkg_dir="$1"
+  source="$2"
+  ref_name="$3"
+  hash_file="${TMPDIR:-/tmp}/dep.$$.git-hash"
+
+  if source_url=$(dep_git_try_candidates "$pkg_dir" "$source" dep_git_probe_ref_candidate "$ref_name" "$hash_file"); then
+    hash=$(sed -n '1p' "$hash_file")
+    rm -f "$hash_file"
+    printf '%s %s\n' "$source_url" "$hash"
+    return 0
+  fi
+
+  rm -f "$hash_file"
   return 1
 )
 
