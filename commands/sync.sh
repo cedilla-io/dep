@@ -250,15 +250,7 @@ dep_sync_tree()(
 
       if ! test -d "$store"; then
         if dep_is_git_remote_source "$source"; then
-          if test -n "$source_url"; then
-            dep_verbose "clone git: $source_url -> $store"
-            dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || {
-              echo "impossible de cloner $source (source résolue: $source_url)"
-              return 1
-            }
-          else
-            source_url=$(dep_git_clone_with_fallback "$pkg_dir" "$source" "$store") || return 1
-          fi
+          source_url=$(dep_git_clone_with_fallback "$pkg_dir" "$source" "$store" "$source_url") || return 1
         else
           dep_verbose "clone git: $source_url -> $store"
           dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1

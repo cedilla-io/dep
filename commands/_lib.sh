@@ -820,10 +820,17 @@ dep_git_clone_with_fallback()(
   pkg_dir="$1"
   source="$2"
   store="$3"
+  preferred_url="${4-}"
   candidates=$(dep_git_source_candidates "$source") || {
     echo "impossible de préparer les sources git pour $source (fallback ssh/https)"
     return 1
   }
+
+  attempts=""
+  tried=""
+  if test -n "$preferred_url"; then
+    attempts=$(dep_append_line "$attempts" "$preferred_url")
+  fi
 
   nl='
 '
@@ -831,6 +838,20 @@ dep_git_clone_with_fallback()(
   IFS=$nl
   set -f
   for source_url in $candidates; do
+    attempts=$(dep_append_line "$attempts" "$source_url")
+  done
+
+  for source_url in $attempts; do
+    test -n "$source_url" || continue
+    case "
+$tried
+" in
+      *"
+$source_url
+"*) continue ;;
+    esac
+    tried=$(dep_append_line "$tried" "$source_url")
+    rm -rf "$store"
     dep_verbose "clone candidate: $source_url -> $store"
     if dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store"; then
       printf '%s\n' "$source_url"
@@ -842,6 +863,7 @@ dep_git_clone_with_fallback()(
   set +f
   IFS=$old_ifs
 
+  rm -rf "$store"
   echo "impossible de cloner $source (fallback ssh/https épuisé)"
   return 1
 )
