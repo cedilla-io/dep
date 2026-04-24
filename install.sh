@@ -99,9 +99,13 @@ main()(
   fi
 
   mkdir -p "$dest/commands"
+  mkdir -p "$dest/clone-strategies"
   cp "$dir/dep" "$dest/dep"
   cp "$dir/VERSION" "$dest/VERSION"
   cp "$dir"/commands/*.sh "$dest/commands/"
+  if test -d "$dir/clone-strategies"; then
+    cp "$dir"/clone-strategies/*.sh "$dest/clone-strategies/"
+  fi
   if test -f "$dir/known_hosts"; then
     cp "$dir/known_hosts" "$dest/known_hosts"
   fi

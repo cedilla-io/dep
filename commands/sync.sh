@@ -250,17 +250,17 @@ dep_sync_tree()(
       store=$(dep_store_entry_path "$root_dir" "$name#$hash")
 
       if ! test -d "$store"; then
-        if test -n "$source_url"; then
-          dep_verbose "clone git: $source_url -> $store"
-          dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
-        else
-          resolved_clone_source=$(dep_git_try_candidates "$pkg_dir" "$source" dep_git_clone_candidate "$store") || {
+        if dep_is_git_remote_source "$source"; then
+          resolved_clone_source=$(dep_git_clone_with_fallback "$pkg_dir" "$source" "$store" "$source_url") || {
             candidates=$(dep_git_candidates_join "$source")
             echo "impossible de cloner $source via candidats git: $candidates"
             return 1
           }
           source_url="$resolved_clone_source"
           dep_verbose "clone git fallback: $source_url -> $store"
+        else
+          dep_verbose "clone git: $source_url -> $store"
+          dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store" || return 1
         fi
         dep_verbose "checkout git: $name@$ref_name -> $hash"
         dep_git "$pkg_dir" -C "$store" checkout -q "$hash" || return 1
