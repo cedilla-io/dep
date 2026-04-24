@@ -143,8 +143,6 @@ Des stratégies prêtes à l'emploi sont fournies dans `clone-strategies/`:
 - `clone-strategies/default-dev.sh` (par défaut) : SSH puis HTTPS
 - `clone-strategies/github-ci.sh` : HTTPS tokenisé GitHub en priorité
 
-Par défaut, `config.sh` sélectionne automatiquement `github-ci` quand `GITHUB_ACTIONS=true` (sinon `default-dev`). Vous pouvez forcer avec `DEP_CLONE_STRATEGY=github-ci` ou `DEP_CLONE_STRATEGY=default-dev`.
-
 Exemple concret (fallback attendu) :
 
 ```sh

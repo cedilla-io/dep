@@ -9,26 +9,7 @@
 #   DEP_CLONE_STRATEGY=default-dev
 #   DEP_CLONE_STRATEGY=github-ci
 
-strategy=${DEP_CLONE_STRATEGY:-}
-if test -z "$strategy"; then
-  if test "${GITHUB_ACTIONS:-}" = "true"; then
-    strategy="github-ci"
-  else
-    strategy="default-dev"
-  fi
-fi
+strategy=${DEP_CLONE_STRATEGY:-default-dev}
 
-case "$strategy" in
-  github-ci)
-    if test -f "${DEP_ROOT:-.}/clone-strategies/github-ci.sh"; then
-      . "${DEP_ROOT:-.}/clone-strategies/github-ci.sh"
-    elif test -f "${DEP_ROOT:-.}/clone-strategies/default-dev.sh"; then
-      . "${DEP_ROOT:-.}/clone-strategies/default-dev.sh"
-    fi
-    ;;
-  default-dev|*)
-    if test -f "${DEP_ROOT:-.}/clone-strategies/default-dev.sh"; then
-      . "${DEP_ROOT:-.}/clone-strategies/default-dev.sh"
-    fi
-    ;;
-esac
+
+. "${DEP_ROOT:-.}/clone-strategies/$strategy.sh"
