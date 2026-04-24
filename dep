@@ -74,6 +74,7 @@ main()(
     return
   fi
 
+  echo "Commande non trouvee ! Avez vous dep sync avant ?"
   dep_help
   return 1 # Commande non trouvee
 )
