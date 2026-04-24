@@ -228,13 +228,21 @@ dep_sync_tree()(
           test -n "$hash" || hash=$(git -C "$local_source" rev-parse "$ref_name")
           ;;
         *)
-          if ! dep_is_ssh_source "$source"; then
+          if ! dep_is_git_remote_source "$source"; then
             echo "source git non supportée: $source"
-            echo "utiliser [git@]host:owner/repo[.git][@ref] ou un chemin local"
+            echo "utiliser [git@]host:owner/repo[.git][@ref], https://host/owner/repo[.git][@ref] ou un chemin local"
             return 1
           fi
-          source_url=$(dep_git_remote_url "$source") || return 1
-          test -n "$hash" || hash=$(dep_git "$pkg_dir" ls-remote "$source_url" "$ref_name" | cut -f1 | head -1)
+          if test -n "$hash"; then
+            source_url=$(dep_git_source_candidates "$source" | head -1)
+          else
+            resolved=$(dep_git_resolve_remote "$pkg_dir" "$source" "$ref_name") || {
+              echo "impossible de résoudre $source ($ref_name) via ssh/https"
+              return 1
+            }
+            source_url=${resolved% *}
+            hash=${resolved##* }
+          fi
           ;;
       esac
 

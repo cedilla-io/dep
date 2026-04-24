@@ -34,6 +34,8 @@ Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une lig
 ```sh
 dep add ./libs/mylib                  # dep locale (symlink)
 dep add github.com:acme/tool@v1      # dep git SSH (clone shallow)
+dep add git@github.com:acme/tool.git # dep git SSH explicite
+dep add https://github.com/acme/tool.git@main # dep git HTTPS explicite
 ```
 
 ## Lancer les tests
@@ -126,7 +128,23 @@ github.com:acme/tool@v1       # dep git SSH (clone shallow)
 
 Texte brut, jamais sourcé. Lignes `#` = commentaires.
 
-Git distant : `[git@]host:owner/repo[.git][@ref]`.
+Git distant :
+
+- implicite (stratégie): `host:owner/repo[.git][@ref]`
+- SSH explicite: `git@host:owner/repo[.git][@ref]` ou `ssh://git@host/owner/repo[.git][@ref]`
+- HTTPS explicite: `https://host/owner/repo[.git][@ref]`
+
+Pour les sources implicites `host:owner/repo`, `dep` tente SSH puis HTTPS.
+
+### Stratégie Git configurable (hooks)
+
+`dep` source `~/.dep/config.sh` au démarrage. Vous pouvez y surcharger:
+
+- `dep_repo_to_ssh(repo)` pour produire l'URL SSH.
+- `dep_repo_to_https(repo)` pour produire l'URL HTTPS.
+- `dep_git_source_candidates(source)` pour forcer un ordre de fallback.
+
+Voir `docs/git-strategy.example.sh` pour des exemples GitLab/GitHub tokenisés.
 
 ## @scripts
 
