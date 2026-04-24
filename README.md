@@ -29,11 +29,12 @@ Le script s'installe dans `~/.dep`, crée `~/.local/bin/dep`, et injecte une lig
 | `dep --version` | Affiche la version |
 
 
-## Notes
+## Moyens de fetch
 
 ```sh
-dep add ./libs/mylib                  # dep locale (symlink)
-dep add github.com:acme/tool@v1      # dep git SSH (clone shallow)
+dep add ./libs/mylib                 # dep locale (symlink)
+dep add ./libs/mylib@branch          # dep locale (via git clone)
+dep add github.com:acme/tool@v1      # selon la strategie
 dep add git@github.com:acme/tool.git # dep git SSH explicite
 dep add https://github.com/acme/tool.git@main # dep git HTTPS explicite
 ```
@@ -118,23 +119,14 @@ Effet pratique : toute modification du `@manifest` est détectée/recalculée au
 - Si le projet n'est pas versionné, ces fichiers continuent de fonctionner de la même manière.
 - Recommandation : garder `.@/` ignoré (fichiers générés), et versionner `@manifest` (+ `@lock` si vous voulez figer les hashes).
 
-## @manifest
+## format @manifest
 
 ```
 1.0.0                          # version min de dep requise
 ./libs/core                    # dep locale (symlink)
 github.com:acme/tool@v1       # dep git SSH (clone shallow)
 ```
-
-Texte brut, jamais sourcé. Lignes `#` = commentaires.
-
-Git distant :
-
-- implicite (stratégie): `host:owner/repo[.git][@ref]`
-- SSH explicite: `git@host:owner/repo[.git][@ref]` ou `ssh://git@host/owner/repo[.git][@ref]`
-- HTTPS explicite: `https://host/owner/repo[.git][@ref]`
-
-Pour les sources implicites `host:owner/repo`, `dep` tente SSH puis HTTPS.
+Texte brut. Lignes `#` = commentaires.
 
 ### Stratégie Git configurable (hooks)
 
