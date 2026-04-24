@@ -75,6 +75,7 @@ main()(
   fi
 
   dep_help
+  return 1 # Commande non trouvee
 )
 
 main "$@"
