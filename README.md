@@ -144,7 +144,10 @@ Pour les sources implicites `host:owner/repo`, `dep` tente SSH puis HTTPS.
 - `dep_repo_to_https(repo)` pour produire l'URL HTTPS.
 - `dep_git_source_candidates(source)` pour forcer un ordre de fallback.
 
-Voir `docs/git-strategy.example.sh` pour des exemples GitLab/GitHub tokenisés.
+Des stratégies prêtes à l'emploi sont fournies dans `clone-strategy/`:
+
+- `clone-strategy/default-dev.sh` (par défaut) : SSH puis HTTPS
+- `clone-strategy/github-ci.sh` : HTTPS tokenisé GitHub en priorité
 
 ## @scripts
 

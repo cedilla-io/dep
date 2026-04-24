@@ -2,7 +2,11 @@
 # ce fichier est sourcé par dep au démarrage (installé dans ~/.dep/config.sh)
 # les variables d'environnement ont priorité sur ce fichier
 
-# Hooks de stratégie git (optionnels, à définir dans ~/.dep/config.sh):
-# - dep_repo_to_ssh(repo) -> URL SSH finale
-# - dep_repo_to_https(repo) -> URL HTTPS finale
-# - dep_git_source_candidates(source) -> liste d'URLs candidates (une par ligne)
+# Stratégie de clone par défaut (dev): SSH puis fallback HTTPS.
+# Décommenter la ligne CI pour forcer HTTPS tokenisé GitHub.
+if test -f "${DEP_ROOT:-.}/clone-strategy/default-dev.sh"; then
+  . "${DEP_ROOT:-.}/clone-strategy/default-dev.sh"
+fi
+# if test -f "${DEP_ROOT:-.}/clone-strategy/github-ci.sh"; then
+#   . "${DEP_ROOT:-.}/clone-strategy/github-ci.sh"
+# fi
