@@ -109,6 +109,8 @@ Effet pratique : toute modification du `@manifest` est détectée/recalculée au
 
 - `dep sync` traite `@lock` comme la source de vérité des hashes déjà résolus.
 - Tant que `@lock` contient une entrée pour une dep git donnée, `sync` **conserve ce hash** (même si la branche distante a avancé).
+- Si `@lock` contient déjà un hash mais que `.@/name#hash` est absent (store supprimé, clone CI vierge, cache nettoyé), `sync` doit **recloner ce hash verrouillé**.
+- Ce reclone conserve la stratégie de fallback configurée: pour une source implicite (`host:owner/repo`), `dep` essaie SSH puis HTTPS (ou l'ordre défini par `dep_git_source_candidates`), y compris en mode hash déjà locké.
 - `dep update` supprime `@lock` puis relance la résolution : c'est l'opération explicite pour avancer les hashes.
 
 ## Projet sans Git
@@ -140,6 +142,15 @@ Des stratégies prêtes à l'emploi sont fournies dans `clone-strategy/`:
 
 - `clone-strategy/default-dev.sh` (par défaut) : SSH puis HTTPS
 - `clone-strategy/github-ci.sh` : HTTPS tokenisé GitHub en priorité
+
+Exemple concret (fallback attendu) :
+
+```sh
+# @lock contient déjà : code.test:acme/tool@main#<hash>
+# L'accès SSH est indisponible (clé absente, réseau bloqué, etc.)
+dep sync
+# => dep retente automatiquement via HTTPS et reclone .@/tool#<hash>
+```
 
 ## @scripts
 

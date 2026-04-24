@@ -816,6 +816,36 @@ dep_git_resolve_remote()(
   return 1
 )
 
+dep_git_clone_with_fallback()(
+  pkg_dir="$1"
+  source="$2"
+  store="$3"
+  candidates=$(dep_git_source_candidates "$source") || {
+    echo "impossible de préparer les sources git pour $source (fallback ssh/https)"
+    return 1
+  }
+
+  nl='
+'
+  old_ifs=$IFS
+  IFS=$nl
+  set -f
+  for source_url in $candidates; do
+    dep_verbose "clone candidate: $source_url -> $store"
+    if dep_git "$pkg_dir" clone --recurse-submodules "$source_url" "$store"; then
+      printf '%s\n' "$source_url"
+      set +f
+      IFS=$old_ifs
+      return 0
+    fi
+  done
+  set +f
+  IFS=$old_ifs
+
+  echo "impossible de cloner $source (fallback ssh/https épuisé)"
+  return 1
+)
+
 dep_git()(
   pkg_dir="$1"; shift
   hosts=""
